@@ -11,9 +11,9 @@
     details:        opencv的y轴是向下增长, 且图片左上角置于原点, 所以要注意坐标
                     example_twisted_corner =  [
                         [0, 0],     # 原图的左上
-                        [9, 0],     # 原图的右上
-                        [9, 9],     # 原图的右下
-                        [0, 9]],    # 原图的左下
+                        [w, 0],     # 原图的右上
+                        [w, h],     # 原图的右下
+                        [0, h]],    # 原图的左下
 
 """
 ##=========================用到的库==========================##
@@ -33,7 +33,6 @@ from modules.files_basic import FilesBasic
 class TwistImgs(FilesBasic):
     def __init__(self,
                  twisted_corner = None,
-
                 # 视角角度, 单位:度
                  vertical_angle: float = -30,    # 垂直(低头的角度)
                  horizontal_angle: float = 20,  # 水平(右摆头的角度)
@@ -95,62 +94,80 @@ class TwistImgs(FilesBasic):
         return True
     
     # ==================初始化并验证变换后的四角坐标==================
-    def init_twist_corner(self, twisted_corner):
+    def init_twist_corner(self, twisted_corners):
         """
-        example_twisted_corner =  [
-                    [0, 0],     # 原图的左上
-                    [9, 0],     # 原图的右上
-                    [9, 9],     # 原图的右下
-                    [0, 9]],    # 原图的左下
+        example_twisted_corners =  [
+                        [0, 0],     # 原图的左上
+                        [w, 0],     # 原图的右上
+                        [w, h],     # 原图的右下
+                        [0, h]],    # 原图的左下
         Parameters:
-            twisted_corner (list of list/tuple): 包含四个点的列表, 每个点为 [x, y]。
+            twisted_corners (list of list/tuple): 包含四个点的列表, 每个点为 [x, y]。
         Returns:
             bool: 如果验证通过返回True, 否则返回False。
         """
-        if not twisted_corner:
+        if not twisted_corners:
             return False
         
-        # 检查twisted_corner是否为列表或元组
-        if not isinstance(twisted_corner, (list, tuple)):
-            self.send_message("Error: twisted_corner must be a list or tuple of four points.")
+        # 检查twisted_corners是否为列表或元组
+        if not isinstance(twisted_corners, (list, tuple)):
+            self.send_message("Error: twisted_corners must be a list or tuple of four points.")
             return False
         
-        if len(twisted_corner) != 4:
-            self.send_message("Error: twisted_corner must contain exactly four points.")
+        if len(twisted_corners) != 4:
+            self.send_message("Error: twisted_corners must contain exactly four points.")
             return False
         
-        for idx, point in enumerate(twisted_corner):
+        for idx, point in enumerate(twisted_corners):
             if not isinstance(point, (list, tuple)):
-                self.send_message(f"Error: Point {idx} in twisted_corner is not a list or tuple.")
+                self.send_message(f"Error: Point {idx} in twisted_corners is not a list or tuple.")
                 return False
             if len(point) != 2:
-                self.send_message(f"Error: Point {idx} in twisted_corner does not have exactly two coordinates.")
+                self.send_message(f"Error: Point {idx} in twisted_corners does not have exactly two coordinates.")
                 return False
-            x, y = point
-            if not (0 <= x <= 9) or not (0 <= y <= 9):
-                self.send_message(f"Error: Coordinates of point {idx} in twisted_corner are out of range [0, 9].")
-                return False
-        
-        # Check if the four points form a valid quadrilateral
+
+        # 检查是否为四边形
         # One simple way is to check if no three points are colinear and the polygon is convex
         try:
-            # Convert to numpy array
-            pts = np.array(twisted_corner, dtype=float)
+            pts = np.array(twisted_corners, dtype=np.float32)
             
             # Check if all points are unique
             if len(np.unique(pts, axis=0)) != 4:
-                self.send_message("Error: All points in twisted_corner must be unique.")
+                self.send_message("Error: All points in twisted_corners must be unique.")
                 return False
             
-            # Check convexity
             if not self.__is_convex_polygon(pts):
-                self.send_message("Error: twisted_corner does not form a convex quadrilateral.")
+                self.send_message("Error: twisted_corners does not form a convex quadrilateral.")
                 return False
         except Exception as e:
-            self.send_message(f"Error: Exception occurred while validating twisted_corner: {e}")
+            self.send_message(f"Error: Exception occurred while validating twisted_corners: {e}")
             return False
+        
+        # 计算原始四边形的最小和最大坐标
+        min_x = np.min(pts[:, 0])
+        min_y = np.min(pts[:, 1])
+    
+        # 如果最小坐标小于零，需要平移整个四边形
+        if min_x < 0 or min_y < 0:
+            translation = np.array([max(-min_x, 0), max(-min_y, 0)])
+            pts += translation  # 对所有点进行平移
+    
+            # 更新最小和最大坐标
+            min_x = np.min(pts[:, 0])
+            min_y = np.min(pts[:, 1])
+    
+        # 如果需要将四边形平移到坐标轴上（使最小坐标为零）
+        if min_x > 0 or min_y > 0:
+            translation = np.array([-min_x, -min_y])
+            pts += translation  # 平移四边形，使其最小坐标为零
+    
+        # 更新四边形的宽度和高度
+        max_x = np.max(pts[:, 0])
+        max_y = np.max(pts[:, 1])
+        self.quad_width = max_x - min_x
+        self.quad_height = max_y - min_y
 
-        self.__twisted_corner = twisted_corner
+        self.__twisted_corners = pts
         self.__twi_corner_or_not = True
         return True
     
@@ -200,22 +217,30 @@ class TwistImgs(FilesBasic):
         if image is None:
             self.send_message(f"Error: Image is None for「{abs_input_path}」")
             return
+
+        # 检查图像是否具有 alpha 通道
+        if image.shape[2] == 3:
+            # 将 BGR 图像转换为 BGRA 图像，添加 alpha 通道
+            try:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
+            except Exception:
+                self.send_message(f"Warning: failed to convert to RGBA")
         # 获取图像尺寸
-        self.height, self.width = image.shape[:2]
+        height, width = image.shape[:2]
 
         # 定义源点（图片四个角）
         src_pts = np.float32([
             [0, 0],                             # 左上
-            [self.width - 1, 0],                # 右上
-            [self.width - 1, self.height - 1],  # 右下
-            [0, self.height - 1]                # 左下
+            [width - 1, 0],                # 右上
+            [width - 1, height - 1],  # 右下
+            [0, height - 1]                # 左下
         ])
         
         # 计算变换后图片四角坐标
         if self.__twi_corner_or_not:
-            dst_pts = self.__cal_corner_coordinate()
+            dst_pts = self.__cal_corner_coordinate(height, width)
         else:
-            dst_pts = self.__cal_angle_coordinate(self.width/2)
+            dst_pts = self.__cal_angle_coordinate(height, width, width/2)
 
         # 计算透视变换矩阵
         try:
@@ -230,15 +255,22 @@ class TwistImgs(FilesBasic):
 
         # 应用透视变换
         try:
-            warped_image = cv2.warpPerspective(image, matrix, (dst_width, dst_height))
-        except cv2.error as e:
-            self.send_message(f"Error: warpPerspective failed for「{abs_input_path}」 with error: {e}")
-            return
+            warped_image = cv2.warpPerspective(
+                                    image, matrix, (dst_width, dst_height),
+                                    borderMode = cv2.BORDER_CONSTANT,
+                                    borderValue = (0, 0, 0, 0))
+        except Exception as e:
+            try:
+                self.send_message(f"Warning: {e}")
+                warped_image = cv2.warpPerspective(image, matrix, (dst_width, dst_height))
+            except cv2.error as e:
+                self.send_message(f"Error: warpPerspective failed for「{abs_input_path}」 with error: {e}")
+                return
 
         # 生成输出文件名
         base_name = os.path.basename(abs_input_path)
-        name, ext = os.path.splitext(base_name)
-        output_name = f"{self.out_dir_suffix}{name}{ext}"
+        name, _ = os.path.splitext(base_name)
+        output_name = f"{name}.png"
         output_path = os.path.join(abs_outfolder_path, output_name)
 
         # 保存结果
@@ -249,36 +281,26 @@ class TwistImgs(FilesBasic):
             self.send_message(f"Error: Failed to save warped image to「{output_path}」 with error: {e}")
 
     ##=============根据四角相对坐标计算变换后图片四角坐标==============
-    def __cal_corner_coordinate(self):
-        # twisted_corner 是相对坐标, 范围 [0, 9]
-        # 需要将其映射到图片的像素坐标
-        # 假设 [0,0] 是左下, [9,0] 右下, [9,9] 右上, [0,9] 左上
+    def __cal_corner_coordinate(self, height, width):
+        # twisted_corner 是相对坐标, 需要将其映射到图片的像素坐标
 
-        # 检查self.height & self.width
-        if not hasattr(self, 'height') or not hasattr(self, 'width'):
-            self.send_message("Error: Image dimensions not set before calculating coordinates.")
-            return None
+        # 计算缩放比例，保持宽高比不变
+        scale_x = width / self.quad_width
+        scale_y = height / self.quad_height
+        scale = min(scale_x, scale_y)  # 选择较小的缩放比例以适应目标尺寸
 
-        # 计算绝对坐标
-        abs_coords = []
-        for point in self.__twisted_corner:
-            rel_x, rel_y = point
-            abs_x = (rel_x / 9) * (self.width - 1)
-            abs_y = (rel_y / 9) * (self.height - 1)
-            abs_coords.append([abs_x, abs_y])
-        
-        dst_pts = np.float32(abs_coords)
-        return dst_pts
+        scaled_corners = self.__twisted_corners * scale
+        return scaled_corners
 
     ##=============根据视角角度计算变换后图片四角坐标==============
-    def __cal_angle_coordinate(self,focal_length):
+    def __cal_angle_coordinate(self,height, width, focal_length):
         # 定义图片四个角在3D空间中的坐标（假设图片位于Z=0平面）
         # src_pts_3d = np.hstack((src_pts, z_values))
         src_pts_3d = np.float32([
             [0, 0, 0],                      # 左上
-            [self.width, 0, 0],             # 右上
-            [self.width, self.height, 0],   # 右下
-            [0, self.height, 0]             # 左下
+            [width, 0, 0],             # 右上
+            [width, height, 0],   # 右下
+            [0, height, 0]             # 左下
         ])
 
         # 视角角度转换为弧度
@@ -303,8 +325,8 @@ class TwistImgs(FilesBasic):
         # 相机/viewer的绝对位置计算(映射到像素坐标), viewer_pos = [x, y]
         normalized_x = self.viewer_pos[0] / 9 
         normalized_y = self.viewer_pos[1] / 9 
-        camera_x = normalized_x * self.width 
-        camera_y = self.height - (normalized_y * self.height)
+        camera_x = normalized_x * width 
+        camera_y = height - (normalized_y * height)
 
         # 1.调整坐标系, 将 y 轴反转, 使其与笛卡尔坐标系一致
         src_pts_3d[:, 1] = -src_pts_3d[:, 1]
@@ -347,15 +369,17 @@ def main():
         work_folder = os.getcwd()
     elif os.path.isdir(input_path):
         work_folder = input_path
+    
     """
         example_twisted_corner =  [
-                    [0, 0],     # 原图的左上
-                    [9, 0],     # 原图的右上
-                    [9, 9],     # 原图的右下
-                    [0, 9]],    # 原图的左下
+                        [0, 0],     # 原图的左上
+                        [w, 0],     # 原图的右上
+                        [w, h],     # 原图的右下
+                        [0, h]],    # 原图的左下
     """
-    twisted_corner = [[0, 0], [9, 2], [8.9, 8.8], [0, 9]]
+    twisted_corner = [[0, 0], [430, 82], [432, 268], [0, 276]]
     img_handler = TwistImgs(twisted_corner = twisted_corner)
+
     img_handler.set_work_folder(work_folder)
     possble_dirs = img_handler.possble_dirs
     
