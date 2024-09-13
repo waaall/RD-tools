@@ -71,6 +71,13 @@ def main():
     window.FileWindow.add_file_operation(split_color_bind.bind_name, split_color_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(split_color_bind.update_setting)
 
+    ##=============================绑定TwistImgs=============================##
+    twist_shape_bind = BatchFilesBinding(TwistImgs(), '扭转图片') 
+    window.FileWindow.selected_signal.connect(twist_shape_bind.update_user_select)   
+    twist_shape_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
+    window.FileWindow.add_file_operation(twist_shape_bind.bind_name, twist_shape_bind.handler_binding)
+    window.SettingWindow.settings.changed_signal.connect(twist_shape_bind.update_setting)
+
     ##=============================app运行=============================##
     window.show()
     sys.exit(app.exec())
