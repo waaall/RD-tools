@@ -298,9 +298,9 @@ class TwistImgs(FilesBasic):
         # src_pts_3d = np.hstack((src_pts, z_values))
         src_pts_3d = np.float32([
             [0, 0, 0],                      # 左上
-            [width, 0, 0],             # 右上
-            [width, height, 0],   # 右下
-            [0, height, 0]             # 左下
+            [width, 0, 0],                  # 右上
+            [width, height, 0],             # 右下
+            [0, height, 0]                  # 左下
         ])
 
         # 视角角度转换为弧度
