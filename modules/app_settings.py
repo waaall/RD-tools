@@ -1,9 +1,18 @@
 """
-    需要注意的几点: 
-        1. 「设置项变量名称」要唯一, 
-        2. 参数path[-1]的名字要与对应接收类的参数名一致
-        3. 参数path[-2]的名字要与对应接收类的类名一致
-        4. 增加设置**需要在 settings.json 和 AppSettings类中增加 **_Settingmap
+
+    create date:    20240828 
+    change date:    20240902
+    creator:        zhengxu
+    function:       设置参数的实时修改与保存
+
+    version:        beta 2.0
+    updates:        提升了模块化
+    
+    details:
+                    1. 「设置项变量名称」要唯一, 
+                    2. 参数path[-1]的名字要与对应接收类的参数名一致
+                    3. 参数path[-2]的名字要与对应接收类的类名一致
+                    4. 增加设置**需要在 settings.json 和 AppSettings类中增加 **_Settingmap
 """
 import os, json
 from PySide6.QtCore import QObject, Signal

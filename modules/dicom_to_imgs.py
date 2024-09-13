@@ -1,15 +1,9 @@
 ##==========================README===========================##
 """
-    本代码beta6版本, zhengxu完成于20240831, 增加了视频保存的功能。
-
-    所需python环境安装完成(加入环境变量), 所需第三方库: 
-    •   pydicom: 用于读取DICOM文件。
-    •   numpy: 处理图像原始像素数据。
-    •   PIL: 处理图像数据并保存为图片。
-    •   matplotlib: 显示图像。
-    •   opencv-python (cv2)：生成视频文件。
-
-    使用实例见代码最后。实例化的work_folder是dicom文件夹的上一级文件夹。
+    create date:    20240805 
+    change date:    20240913
+    creator:        zhengxu
+    function:       批量读取DICOM序列,并转换成图片和视频
 """
 ##=========================用到的库==========================##
 import os
@@ -58,13 +52,14 @@ class DicomToImage(FilesBasic):
         self.out_dir_suffix = out_dir_suffix
 
     ##=====================处理(单个数据文件夹)函数======================##
-    def _data_dir_handler(self, _data_dir):
+    def _data_dir_handler(self, _data_dir:str):
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         seq_dirs = self.__check_dicomdir(_data_dir)
         if not seq_dirs:
             self.send_message(f"Error: empty dicomdir「{_data_dir}」skipped")
             return
-        os.makedirs(self.out_dir_suffix + _data_dir, exist_ok=True)
+        outfolder_name = self.out_dir_suffix + _data_dir
+        os.makedirs(outfolder_name, exist_ok=True)
 
         max_works = min(self.max_threads, os.cpu_count(), len(seq_dirs)*2)
         with ThreadPoolExecutor(max_workers=max_works) as executor:
@@ -75,19 +70,23 @@ class DicomToImage(FilesBasic):
                     self.send_message(f"Warning: empty seq dir「{seq_dir}」skipped")
                     continue
                 for seq in seqs_list:
-                    executor.submit(self.dcmseq_to_img, _data_dir, seq_dir, seq)
+                    abs_input_path = os.path.join(self._work_folder, _data_dir, seq_dir, seq)
+                    abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
+                    executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path, seq_dir_name = seq_dir)
     
     ##======================DICOM序列保存图片======================##
-    def dcmseq_to_img(self,_data_dir, seq_dir, seq_file):
-        # 读取 DICOM 文件
-        seq_path = os.path.join(_data_dir, seq_dir, seq_file)
+    def single_file_handler(self,abs_input_path:str, abs_outfolder_path:str, seq_dir_name:str = 'none'):
+        # 检查文件路径格式
+        if not self.check_file_path(abs_input_path, abs_outfolder_path):
+            self.send_message("Error: failed to check_file_path")
+            return
         try:
             # 尝试读取 DICOM 文件
-            ds = pydicom.dcmread(seq_path)
-            # self.send_message(f"检测到DICOM文件: {seq_path}, 正在处理")
+            ds = pydicom.dcmread(abs_input_path)
+            # self.send_message(f"检测到DICOM文件: {abs_input_path}, 正在处理")
         except Exception:
-            # 如果读取失败, 不抛出异常, 直接返回 0
-            self.send_message(f"Error: failed to read the dicom file「{seq_path}」")
+            # 如果读取失败, 不抛出异常, 直接返回
+            self.send_message(f"Error: failed to read the dicom file「{abs_input_path}」")
             return
         # 检查是否有多帧图像
         num_frames = ds.get('NumberOfFrames', 1)
@@ -96,11 +95,13 @@ class DicomToImage(FilesBasic):
         pixel_array = ds.pixel_array
         
         # 构建输出文件名
-        seq_name, _ = os.path.splitext(seq_file)    #去掉后缀
+        seq_file_name = os.path.basename(abs_input_path)
+        seq_name, _ = os.path.splitext(seq_file_name)    #去掉后缀
 
         # 视频写入初始化
         ref_height, ref_width = pixel_array[0].shape if num_frames > 1 else pixel_array.shape
-        video_filename = os.path.join(self.out_dir_suffix + _data_dir, f'seq{seq_dir}-{seq_name}.mp4')
+        video_filename = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}.mp4')
+        
         # 检测视频文件是否存在，如果存在则删除
         if os.path.exists(video_filename):
             os.remove(video_filename)
@@ -122,7 +123,7 @@ class DicomToImage(FilesBasic):
             # 创建图像对象
             image = Image.fromarray(frame_data)
             # 帧图片输出文件名
-            image_filename = os.path.join(self.out_dir_suffix + _data_dir, f'seq{seq_dir}-{seq_name}-frame_{i+1}.png')
+            image_filename = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}-frame_{i+1}.png')
             ## 保存为 PNG 图片 # image.show()
             image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
             
@@ -132,7 +133,7 @@ class DicomToImage(FilesBasic):
                 # fourcc = cv2.VideoWriter_fourcc(*'H264') # H264 FFMPEG不兼容
                 fourcc = cv2.VideoWriter_fourcc(*'avc1')
                 video_writer = cv2.VideoWriter(video_filename, fourcc, self.fps, (width, height), isColor=False)
-                self.send_message(f'Video Detected: {seq_path}')
+                self.send_message(f'Video Detected: {abs_input_path}')
             # 如果有多帧，将帧写入视频
             if video_writer is not None:
                 height, width = frame_data.shape
@@ -147,9 +148,9 @@ class DicomToImage(FilesBasic):
         # 释放视频对象
         if video_writer is not None:
             video_writer.release()
-            self.send_message(f'Video OUTPUT SUCCESS: {seq_path}')
+            self.send_message(f'Video OUTPUT SUCCESS: {abs_input_path}')
         else:
-            self.send_message(f'Image OUTPUT SUCCESS: {seq_path}')
+            self.send_message(f'Image OUTPUT SUCCESS: {abs_input_path}')
         return
 
     ##=====================找到DICOM序列文件夹列表======================##

@@ -1,4 +1,13 @@
-import sys
+##===========================README============================##
+""" 
+    date:       20240901
+    creator:    zhengxu
+    function:   串口通信
+
+    version:    beta 0.0
+    updates:    
+"""
+##=========================用到的库==========================##import sys
 import time
 import threading
 

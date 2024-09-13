@@ -1,10 +1,16 @@
 ##===========================README============================##
 """ 
-    实验的免疫荧光图片命名按照如下格式:R/G/B_开头,大小写敏感!
-    R_实验名-组名-视野编号.jpg
-    G_实验名-组名-视野编号.jpg
-    
-    该代码会批量搜索成对的R G B, 并把它们红绿通道合成一张图片保存到merge文件夹。
+    create date:    20240824 
+    change date:    20240901
+    creator:        zhengxu
+    function:       批量搜索成对的R G B, 并把它们红绿通道合成为图片保存
+
+    version:        beta 2.0
+    updates:    
+
+    details:    实验的免疫荧光图片命名按照如下格式:R/G/B_开头,大小写敏感!
+                R_实验名-组名-视野编号.png
+                G_实验名-组名-视野编号.jpg
 """
 ##=========================用到的库==========================##
 import os
@@ -58,7 +64,7 @@ class MergeColors(FilesBasic):
             self.colors = sorted(colors)
     
     ##=======================批量处理成对图片=======================##
-    def _data_dir_handler(self, _data_dir):
+    def _data_dir_handler(self, _data_dir:str):
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         img_names = self._get_filenames_by_suffix(_data_dir)
         pairs = self.pair_images(img_names)
@@ -125,7 +131,7 @@ class MergeColors(FilesBasic):
         return pairs
     
     ##======================合并图像并保存=======================##
-    def image_merge(self, _data_dir, images_pair):
+    def image_merge(self, _data_dir:str, images_pair):
         output_name = images_pair[0].split('-', 1)[1]
         output_path = os.path.join(self.out_dir_suffix + _data_dir, output_name)
         

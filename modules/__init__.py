@@ -20,3 +20,6 @@ from .merge_colors import MergeColors
 
 # split_colors(images)
 from .split_colors import SplitColors
+
+# twist_imgs
+from .twist_shape import TwistImgs

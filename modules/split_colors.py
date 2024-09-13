@@ -1,6 +1,13 @@
 ##===========================README============================##
 """ 
-    I/O密集型多个独立子任务,很适合用多线程(即使python多线程无法调用多核)
+    create date:    20240908 
+    change date:    20240913
+    creator:        zhengxu
+    function:       批量分离图片色彩
+
+    version:        beta 3.0
+    updates:        修改了基类FilesBasic,做出了相应调整
+
 """
 ##=========================用到的库==========================##
 import os
@@ -27,7 +34,7 @@ class SplitColors(FilesBasic):
 
         # 需要处理的图片类型
         self.suffixs = ['.jpg', '.png', '.jpeg'] 
-        
+
         # 设置导出图片文件夹的前缀名 & log文件夹名字
         self.log_folder_name = log_folder_name
         self.out_dir_suffix = out_dir_suffix
@@ -50,28 +57,15 @@ class SplitColors(FilesBasic):
                 self.colors = self.__default_colors
             else:
                 self.colors = colors
-    
-    ##=======================批量处理图片=======================##
-    def _data_dir_handler(self, _data_dir):
-        # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
-        img_names = self._get_filenames_by_suffix(_data_dir)
-        if not img_names:
-            self.send_message(f"Error: No images in {_data_dir}")
+
+    ##======================分离单张图片色彩======================##
+    def single_file_handler(self, abs_input_path:str, abs_outfolder_path:str):
+        # 检查文件路径格式
+        if not self.check_file_path(abs_input_path, abs_outfolder_path):
+            self.send_message("Error: failed to check_file_path")
             return
-        os.makedirs(self.out_dir_suffix + _data_dir, exist_ok=True)
-        
-        # 多线程处理每一张图片
-        max_works = min(self.max_threads, os.cpu_count(), len(img_names))
-        with ThreadPoolExecutor(max_workers=max_works) as executor:
-            for img_name in img_names:
-                executor.submit(self.image_handler, _data_dir, img_name)
-
-    ##=======================处理单张图片=======================##
-    def image_handler(self,_data_dir, img_name):
-        img_path = os.path.join(_data_dir, img_name)
-
         # 打开图片并分离色彩通道
-        with Image.open(img_path) as img:
+        with Image.open(abs_input_path) as img:
             # 分离出红、绿、蓝通道;img_clrs 是一个包含 (R, G, B) 的元组
             try:
                 if img.mode != 'RGB':
@@ -95,10 +89,11 @@ class SplitColors(FilesBasic):
     
                 # 合并通道并保存
                 out_img = Image.merge('RGB', tuple(channels))
-                path = os.path.join(self.out_dir_suffix + _data_dir, f"{color}-{img_name}")
-                out_img.save(path, dpi = self.frame_dpi)
+                img_name = os.path.basename(abs_input_path)
+                abs_out_path = os.path.join(abs_outfolder_path, f"{color}-{img_name}")
+                out_img.save(abs_out_path, dpi = self.frame_dpi)
             
-            self.send_message(f"Done split {self.colors} for{img_path}")
+            self.send_message(f"Saved splited images: {img_name}")
 
 ##=====================main(单独执行时使用)=====================
 def main():
@@ -111,13 +106,13 @@ def main():
     elif os.path.isdir(input_path):
         work_folder = input_path
     
-    ColorsHandler = SplitColors()
-    ColorsHandler.set_work_folder(work_folder)
-    possble_dirs = ColorsHandler.possble_dirs
+    img_handler = SplitColors()
+    img_handler.set_work_folder(work_folder)
+    possble_dirs = img_handler.possble_dirs
     
     # 给用户显示，请用户输入index
     number = len(possble_dirs)
-    ColorsHandler.send_message('\n')
+    img_handler.send_message('\n')
     for i in range(number):
         print(f"{i}: {possble_dirs[i]}")
     user_input = input("\n请选择要处理的序号(用空格分隔多个序号): \n")
@@ -127,11 +122,11 @@ def main():
         indices = user_input.split()
         index_list = [int(index) for index in indices]
     except ValueError:
-        ColorsHandler.send_message("输入错误, 必须输入数字")
+        img_handler.send_message("输入错误, 必须输入数字")
 
-    RESULT = ColorsHandler.selected_dirs_handler(index_list)
+    RESULT = img_handler.selected_dirs_handler(index_list)
     if not RESULT:
-        ColorsHandler.send_message("输入数字不在提供范围, 请重新运行")
+        img_handler.send_message("输入数字不在提供范围, 请重新运行")
 
 ##=========================调试用============================
 if __name__ == '__main__':

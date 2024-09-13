@@ -3,8 +3,6 @@ from widgets import *
 from main_window import MainWindow
 
 from modules import *
-# from modules.dicom_to_imgs import DicomToImage
-# from modules.merge_colors import MergeColors
 
 import resources_rc
 ##=========================================================
