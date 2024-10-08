@@ -109,7 +109,7 @@ class FilesBasic(QObject):
                 abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
                 executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path)
 
-    ##=====================处理单个文件函数,子类需重写======================##
+    ##=================准确的说是每个不可拆分的子任务,子类需重写==================##
     def single_file_handler(self, abs_input_path:str, abs_outfolder_path:str):
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):

@@ -79,16 +79,15 @@ class PlottingWindow(QWidget):
 
     def update_plot(self):
         # 生成随机数据，模拟波形更新
-        data1 = [random.randint(-100, 100)]
-        data2 = [random.randint(-50, 50)]
-
         # 更新第一个波形的数据
+        data1 = [random.randint(-100, 100)]
         self.data_buffer1.extend(data1)
         if len(self.data_buffer1) > self.max_buffer_size:
             self.data_buffer1 = self.data_buffer1[-self.max_buffer_size:]
         self.curve1.setData(self.data_buffer1)
 
         # 更新第二个波形的数据
+        data2 = [random.randint(-50, 50)]
         self.data_buffer2.extend(data2)
         if len(self.data_buffer2) > self.max_buffer_size:
             self.data_buffer2 = self.data_buffer2[-self.max_buffer_size:]

@@ -23,3 +23,6 @@ from .split_colors import SplitColors
 
 # twist_imgs
 from .twist_shape import TwistImgs
+
+# bilibili videos
+from .bili_videos import BiliVideos
