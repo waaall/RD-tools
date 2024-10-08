@@ -102,18 +102,22 @@ class BiliVideos(FilesBasic):
         except Exception as e:
             self.send_message(f"音视频合并时发生错误: {str(e)}")
     
+    # 获取m4s文件名
     def __get_file_name(self, path, suffix):
         files = [f for f in os.listdir(path) if f.endswith(suffix)]
-    
+        
+        if len(files) != 2:
+            self.send_message(f"{path}中m4s获取文件失败")
+            return None
+
         if files[0].endswith('-1-30280.m4s'): #audio文件后缀 '-1-30280.m4s'   
             return files
         elif files[1].endswith('-1-30280.m4s'):
             files[0], files[1] = files[1], files[0]
             return files
-        elif len(files) == 0:
-            return files
-        else:    
-            self.send_message(f"{path}中m4s获取文件失败")
+        else:
+            self.send_message(f"{path}中未找到符合条件的音频文件")
+            return None
 
     ##=====================处理(bilibili缓存文件夹)函数======================##
     def _data_dir_handler(self, _data_dir:str):
@@ -134,17 +138,23 @@ class BiliVideos(FilesBasic):
     ##========处理单个文件文件夹内的视频和音频，生成一个可播放的视频========##
     def single_video_handler(self, abs_input_path:str, abs_outfolder_path:str):
         names = self.__get_file_name(abs_input_path, '.m4s')
-        if len(names) == 2:
-            self.__fix_m4s(abs_input_path, names[1]) #改视频文件
-            self.__fix_m4s(abs_input_path, names[0]) #改音频文件
+        if not names:
+            return
 
-            video = f"{abs_input_path}/o{names[1]}"
-            audio = f"{abs_input_path}/o{names[0]}"
+        self.__fix_m4s(abs_input_path, names[1]) #改视频文件
+        self.send_message(f"正在处理视频文件：{names[1]}")
 
-            info = abs_input_path + '/videoInfo.json'
-            out_video = os.path.join(abs_outfolder_path, self.__get_title(info) + '.mp4')
-            
-            self.__transform(video, audio, out_video) #合成音视频
+        self.__fix_m4s(abs_input_path, names[0]) #改音频文件
+        self.send_message(f"正在处理音频文件：{names[0]}")
+
+        video = f"{abs_input_path}/o{names[1]}"
+        audio = f"{abs_input_path}/o{names[0]}"
+
+        info = abs_input_path + '/videoInfo.json'
+        out_video = os.path.join(abs_outfolder_path, self.__get_title(info) + '.mp4')
+        
+        self.__transform(video, audio, out_video) #合成音视频
+
 
 ##=====================main(单独执行时使用)=====================
 def main():
