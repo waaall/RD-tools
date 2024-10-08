@@ -34,38 +34,75 @@ class BiliVideos(FilesBasic):
                  out_dir_suffix :str = 'videos-'):
         super().__init__()
 
-    def __fix_m4s(path: str, name: str, bufsize: int = 256*1024*1024) -> None:
+    def __fix_m4s(self, path: str, name: str, bufsize: int = 256*1024*1024) -> None:
         assert bufsize > 0
         file = f"{path}/{name}"
         out_file = f"{path}/o{name}"
     
-        media = open(file, 'rb')
-        header = media.read(32)
-        new_header = header.replace(b'000000000', b'')
-        # new_header = new_header.replace(b'$', b' ')
-        # new_header = new_header.replace(b'avc1', b'')
-        out_media = open(out_file, 'wb')
-        out_media.write(new_header)
-        buf = media.read(bufsize)
-        while buf:
-            out_media.write(buf)
+        try:
+            media = open(file, 'rb')
+            header = media.read(32)
+
+            # 判断头文件是否符合预期
+            if b'000000000' not in header:
+                self.send_message(f"文件 {file} 的头文件不符合预期")
+                return
+            new_header = header.replace(b'000000000', b'')
+            
+            # 替换完成的文件写入
+            out_media = open(out_file, 'wb')
+            out_media.write(new_header)
+
             buf = media.read(bufsize)
+            while buf:
+                out_media.write(buf)
+                buf = media.read(bufsize)
+
+            self.send_message(f"文件 {file} 修复完成并保存为 {out_file}")
+        except Exception as e:
+            self.send_message(f"修复文件 {file} 时发生错误: {str(e)}")
+        finally:
+            media.close()
+            out_media.close()
     
     # 解析json文件, 获取标题, 将其返回
-    def __get_title(info):
-        f = open(info,'r',encoding='utf8')
-        info_data = load(f)
-        title = info_data['title']
-        print(f"该视频为：\n\t{title}\n")
-        return title
+    def __get_title(self, info):
+        if not os.path.exists(info):
+            self.send_message(f"JSON 文件 {info} 不存在")
+            return None
+        
+        try:
+            with open(info, 'r', encoding='utf8') as f:
+                info_data = load(f)
+
+            # 检查 JSON 文件中是否有 'title' 字段
+            if 'title' not in info_data:
+                self.send_message(f"JSON 文件 {info} 中缺少 'title' 字段")
+                return None
+
+            title = info_data['title']
+            self.send_message(f"该视频的标题为：\n\t{title}\n")
+            return title
+        except Exception as e:
+            self.send_message(f"解析 JSON 文件 {info} 时出错: {str(e)}")
+            return None
+
     
     # 转换合并函数
-    def __transform(v,a,o):
-        ff = FFmpeg(inputs={v:None,a:None},outputs={o:'-vcodec copy -acodec copy'})
-        print(ff.cmd)
-        ff.run()
+    def __transform(self, v,a,o):
+        if not os.path.exists(v) or not os.path.exists(a):
+            self.send_message(f"视频文件 {v} 或音频文件 {a} 不存在，无法进行转换")
+            return
+
+        try:
+            ff = FFmpeg(inputs={v: None, a: None}, outputs={o: '-vcodec copy -acodec copy'})
+            self.send_message(f"执行转换命令：{ff.cmd}")
+            ff.run()
+            self.send_message(f"音视频合并成功，输出文件为 {o}")
+        except Exception as e:
+            self.send_message(f"音视频合并时发生错误: {str(e)}")
     
-    def __get_file_name(path, suffix):
+    def __get_file_name(self, path, suffix):
         files = [f for f in os.listdir(path) if f.endswith(suffix)]
     
         if files[0].endswith('-1-30280.m4s'): #audio文件后缀 '-1-30280.m4s'   
@@ -76,7 +113,7 @@ class BiliVideos(FilesBasic):
         elif len(files) == 0:
             return files
         else:    
-            raise ValueError('获取文件失败')
+            self.send_message(f"{path}中m4s获取文件失败")
 
     ##=====================处理(bilibili缓存文件夹)函数======================##
     def _data_dir_handler(self, _data_dir:str):
