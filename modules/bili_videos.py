@@ -31,13 +31,16 @@ from modules.files_basic import FilesBasic
 class BiliVideos(FilesBasic):
     def __init__(self, 
                  log_folder_name :str = 'bili_video_handle_log',
-                 out_dir_suffix :str = 'videos-'):
+                 middle_file_prefix: str = 'out-',
+                 out_dir_prefix :str = 'videos-'):
         super().__init__()
+        self.middle_file_prefix = middle_file_prefix
 
+    # 修复音视频文件
     def __fix_m4s(self, path: str, name: str, bufsize: int = 256*1024*1024) -> None:
         assert bufsize > 0
         file = f"{path}/{name}"
-        out_file = f"{path}/o{name}"
+        out_file = f"{path}/{self.middle_file_prefix}{name}"
     
         try:
             media = open(file, 'rb')
@@ -58,9 +61,9 @@ class BiliVideos(FilesBasic):
                 out_media.write(buf)
                 buf = media.read(bufsize)
 
-            self.send_message(f"文件 {file} 修复完成并保存为 {out_file}")
+            self.send_message(f"文件「{file}」修复完成并保存为「{out_file}」")
         except Exception as e:
-            self.send_message(f"修复文件 {file} 时发生错误: {str(e)}")
+            self.send_message(f"修复文件「{file}」时发生错误: {str(e)}")
         finally:
             media.close()
             out_media.close()
@@ -68,35 +71,34 @@ class BiliVideos(FilesBasic):
     # 解析json文件, 获取标题, 将其返回
     def __get_title(self, info):
         if not os.path.exists(info):
-            self.send_message(f"JSON 文件 {info} 不存在")
+            self.send_message(f"info 文件「{info}」不存在")
             return None
         
         try:
             with open(info, 'r', encoding='utf8') as f:
                 info_data = load(f)
 
-            # 检查 JSON 文件中是否有 'title' 字段
+            # 检查 info 文件中是否有 'title' 字段
             if 'title' not in info_data:
-                self.send_message(f"JSON 文件 {info} 中缺少 'title' 字段")
+                self.send_message(f"info 文件「{info}」中缺少 'title' 字段")
                 return None
 
             title = info_data['title']
             self.send_message(f"该视频的标题为：\n\t{title}\n")
             return title
         except Exception as e:
-            self.send_message(f"解析 JSON 文件 {info} 时出错: {str(e)}")
+            self.send_message(f"解析 info 文件「{info}」时出错: {str(e)}")
             return None
-
     
     # 转换合并函数
     def __transform(self, v,a,o):
         if not os.path.exists(v) or not os.path.exists(a):
-            self.send_message(f"视频文件 {v} 或音频文件 {a} 不存在，无法进行转换")
+            self.send_message(f"视频文件「{v}」或音频文件「{a}」不存在，无法进行转换")
             return
 
         try:
             ff = FFmpeg(inputs={v: None, a: None}, outputs={o: '-vcodec copy -acodec copy'})
-            self.send_message(f"执行转换命令：{ff.cmd}")
+            # self.send_message(f"执行转换命令：{ff.cmd}")
             ff.run()
             self.send_message(f"音视频合并成功，输出文件为 {o}")
         except Exception as e:
@@ -104,10 +106,14 @@ class BiliVideos(FilesBasic):
     
     # 获取m4s文件名
     def __get_file_name(self, path, suffix):
-        files = [f for f in os.listdir(path) if f.endswith(suffix)]
+        files = [f for f in os.listdir(path) if f.endswith(suffix) 
+                    and not f.startswith(self.middle_file_prefix)]
         
-        if len(files) != 2:
-            self.send_message(f"{path}中m4s获取文件失败")
+        if len(files) < 2:
+            self.send_message(f"「{path}」中m4s获取文件失败")
+            return None
+        elif len(files) > 2:
+            self.send_message(f"「{path}」中存在多于2个m4s文件")
             return None
 
         if files[0].endswith('-1-30280.m4s'): #audio文件后缀 '-1-30280.m4s'   
@@ -116,12 +122,12 @@ class BiliVideos(FilesBasic):
             files[0], files[1] = files[1], files[0]
             return files
         else:
-            self.send_message(f"{path}中未找到符合条件的音频文件")
+            self.send_message(f"「{path}」中未找到符合条件的音频文件")
             return None
 
     ##=====================处理(bilibili缓存文件夹)函数======================##
     def _data_dir_handler(self, _data_dir:str):
-        outfolder_name = self.out_dir_suffix + _data_dir
+        outfolder_name = self.out_dir_prefix + _data_dir
         os.makedirs(outfolder_name, exist_ok=True)
         
         paths = os.listdir(_data_dir)

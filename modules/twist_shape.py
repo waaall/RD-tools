@@ -43,7 +43,7 @@ class TwistImgs(FilesBasic):
 
                  log_folder_name :str = 'twist_imgs_log', 
                  frame_dpi :int = 200,
-                 out_dir_suffix :str = 'twisted-'
+                 out_dir_prefix :str = 'twisted-'
         ):
         super().__init__()
 
@@ -65,7 +65,7 @@ class TwistImgs(FilesBasic):
 
         # 设置导出图片文件夹的前缀名 & log文件夹名字
         self.log_folder_name = log_folder_name
-        self.out_dir_suffix = out_dir_suffix
+        self.out_dir_prefix = out_dir_prefix
 
     def init_viewer_pos_angles(self, viewer_pos_x: float, viewer_pos_y: float,
                                 vertical_angle: float, horizontal_angle: float):

@@ -32,7 +32,7 @@ class MergeColors(FilesBasic):
                  frame_dpi :int = 200,
                  colors = None, 
                  strict_match :bool = True, 
-                 out_dir_suffix :str = 'merge-'):
+                 out_dir_prefix :str = 'merge-'):
         super().__init__()
         # 是否需要严格匹配, 如果否则找到对应文件pair就处理
         self.strict_match = strict_match
@@ -46,7 +46,7 @@ class MergeColors(FilesBasic):
         
         # 设置导出图片文件夹的前缀名 & log文件夹名字
         self.log_folder_name = log_folder_name
-        self.out_dir_suffix = out_dir_suffix
+        self.out_dir_prefix = out_dir_prefix
 
     # 设置分离的颜色,如果colors(统一大写)不为None且合法则使用,否则使用默认的RGB
     def init_colors(self, colors):
@@ -71,7 +71,7 @@ class MergeColors(FilesBasic):
         if not pairs:
             self.send_message(f"Error: No images in {_data_dir}")
             return
-        os.makedirs(self.out_dir_suffix + _data_dir, exist_ok=True)
+        os.makedirs(self.out_dir_prefix + _data_dir, exist_ok=True)
 
         # 多线程处理每一对图片
         max_works = min(self.max_threads, os.cpu_count(), len(pairs))
@@ -133,7 +133,7 @@ class MergeColors(FilesBasic):
     ##======================合并图像并保存=======================##
     def image_merge(self, _data_dir:str, images_pair):
         output_name = images_pair[0].split('-', 1)[1]
-        output_path = os.path.join(self.out_dir_suffix + _data_dir, output_name)
+        output_path = os.path.join(self.out_dir_prefix + _data_dir, output_name)
         
         channel_map = {}        # 初始化通道字典,按RGB分别存储
         expected_size = None    # 用于存储期望的图像尺寸

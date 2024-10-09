@@ -39,7 +39,7 @@ class DicomToImage(FilesBasic):
                  log_folder_name :str = 'dicom_handle_log',
                  fps :int = 10, 
                  frame_dpi :int = 800, 
-                 out_dir_suffix :str = 'Img-'):
+                 out_dir_prefix :str = 'Img-'):
         super().__init__()
 
         # 重写父类suffixs,为dicom文件可能的后缀
@@ -49,7 +49,7 @@ class DicomToImage(FilesBasic):
         self.fps = fps
         self.frame_dpi = frame_dpi
         self.log_folder_name = log_folder_name
-        self.out_dir_suffix = out_dir_suffix
+        self.out_dir_prefix = out_dir_prefix
 
     ##=====================处理(单个数据文件夹)函数======================##
     def _data_dir_handler(self, _data_dir:str):
@@ -58,7 +58,7 @@ class DicomToImage(FilesBasic):
         if not seq_dirs:
             self.send_message(f"Error: empty dicomdir「{_data_dir}」skipped")
             return
-        outfolder_name = self.out_dir_suffix + _data_dir
+        outfolder_name = self.out_dir_prefix + _data_dir
         os.makedirs(outfolder_name, exist_ok=True)
 
         max_works = min(self.max_threads, os.cpu_count(), len(seq_dirs)*2)

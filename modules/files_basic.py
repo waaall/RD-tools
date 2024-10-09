@@ -26,7 +26,7 @@ class FilesBasic(QObject):
     result_signal = Signal(str)
     def __init__(self,
                  log_folder_name :str = 'handle_log',
-                 out_dir_suffix :str = 'Out-', 
+                 out_dir_prefix :str = 'Out-', 
                  max_threads :int = 3):
         
         super().__init__()
@@ -47,7 +47,7 @@ class FilesBasic(QObject):
 
         # 设置导出文件夹的前缀名 & log文件夹名字
         self.log_folder_name = log_folder_name
-        self.out_dir_suffix = out_dir_suffix
+        self.out_dir_prefix = out_dir_prefix
 
     ##======================设置workfolder======================##
     def set_work_folder(self, work_folder:str):
@@ -98,7 +98,7 @@ class FilesBasic(QObject):
         if not file_list:
             self.send_message(f"Error: No file in {_data_dir}")
             return
-        outfolder_name = self.out_dir_suffix + _data_dir
+        outfolder_name = self.out_dir_prefix + _data_dir
         os.makedirs(outfolder_name, exist_ok=True)
         
         # 多线程处理单个文件

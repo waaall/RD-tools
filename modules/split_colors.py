@@ -27,7 +27,7 @@ class SplitColors(FilesBasic):
                  log_folder_name :str = 'split_colors_log', 
                  frame_dpi :int = 200,
                  colors = None, 
-                 out_dir_suffix :str = 'split-'):
+                 out_dir_prefix :str = 'split-'):
         
         super().__init__()
         self.init_colors(colors)
@@ -37,7 +37,7 @@ class SplitColors(FilesBasic):
 
         # 设置导出图片文件夹的前缀名 & log文件夹名字
         self.log_folder_name = log_folder_name
-        self.out_dir_suffix = out_dir_suffix
+        self.out_dir_prefix = out_dir_prefix
 
         # 设置导出图片dpi
         self.frame_dpi = (frame_dpi, frame_dpi)
