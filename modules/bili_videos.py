@@ -48,7 +48,7 @@ class BiliVideos(FilesBasic):
 
             # 判断头文件是否符合预期
             if b'000000000' not in header:
-                self.send_message(f"文件 {file} 的头文件不符合预期")
+                self.send_message(f"Warning: 文件 {file} 的头文件不符合预期")
                 return
             new_header = header.replace(b'000000000', b'')
             
@@ -61,9 +61,9 @@ class BiliVideos(FilesBasic):
                 out_media.write(buf)
                 buf = media.read(bufsize)
 
-            self.send_message(f"文件「{file}」修复完成并保存为「{out_file}」")
+            self.send_message(f"文件修复完成并保存为「{out_file}」")
         except Exception as e:
-            self.send_message(f"修复文件「{file}」时发生错误: {str(e)}")
+            self.send_message(f"Error: 修复文件时发生错误: {str(e)}")
         finally:
             media.close()
             out_media.close()
@@ -71,38 +71,38 @@ class BiliVideos(FilesBasic):
     # 解析json文件, 获取标题, 将其返回
     def __get_title(self, info):
         if not os.path.exists(info):
-            self.send_message(f"info 文件「{info}」不存在")
+            self.send_message(f"Warning: info 文件「{info}」不存在")
             return None
-        
+
         try:
             with open(info, 'r', encoding='utf8') as f:
                 info_data = load(f)
 
             # 检查 info 文件中是否有 'title' 字段
             if 'title' not in info_data:
-                self.send_message(f"info 文件「{info}」中缺少 'title' 字段")
+                self.send_message(f"Warning: info 文件「{info}」中缺少 'title' 字段")
                 return None
 
             title = info_data['title']
-            self.send_message(f"该视频的标题为：\n\t{title}\n")
             return title
         except Exception as e:
-            self.send_message(f"解析 info 文件「{info}」时出错: {str(e)}")
+            self.send_message(f"Warning: info文件解析错误: {str(e)}")
             return None
     
     # 转换合并函数
     def __transform(self, v,a,o):
         if not os.path.exists(v) or not os.path.exists(a):
-            self.send_message(f"视频文件「{v}」或音频文件「{a}」不存在，无法进行转换")
-            return
+            self.send_message(f"Error: 视频文件「{v}」或音频文件「{a}」不存在，无法进行转换")
+            return False
 
         try:
             ff = FFmpeg(inputs={v: None, a: None}, outputs={o: '-vcodec copy -acodec copy'})
-            # self.send_message(f"执行转换命令：{ff.cmd}")
+            print(f"执行转换命令：{ff.cmd}")
             ff.run()
-            self.send_message(f"音视频合并成功，输出文件为 {o}")
+            return True
         except Exception as e:
-            self.send_message(f"音视频合并时发生错误: {str(e)}")
+            self.send_message(f"Error: 音视频合并时发生错误: {str(e)}")
+            return False
     
     # 获取m4s文件名
     def __get_file_name(self, path, suffix):
@@ -110,10 +110,10 @@ class BiliVideos(FilesBasic):
                     and not f.startswith(self.middle_file_prefix)]
         
         if len(files) < 2:
-            self.send_message(f"「{path}」中m4s获取文件失败")
+            self.send_message(f"Error: m4s获取文件失败「{path}」")
             return None
         elif len(files) > 2:
-            self.send_message(f"「{path}」中存在多于2个m4s文件")
+            self.send_message(f"Error: 存在多于2个m4s文件「{path}」")
             return None
 
         if files[0].endswith('-1-30280.m4s'): #audio文件后缀 '-1-30280.m4s'   
@@ -122,7 +122,7 @@ class BiliVideos(FilesBasic):
             files[0], files[1] = files[1], files[0]
             return files
         else:
-            self.send_message(f"「{path}」中未找到符合条件的音频文件")
+            self.send_message(f"Error: 未找到符合条件的音频文件「{path}」")
             return None
 
     ##=====================处理(bilibili缓存文件夹)函数======================##
@@ -158,10 +158,20 @@ class BiliVideos(FilesBasic):
         audio = f"{abs_input_path}/{self.middle_file_prefix}{names[0]}"
 
         info = abs_input_path + '/videoInfo.json'
-        out_video = os.path.join(abs_outfolder_path, self.__get_title(info) + '.mp4')
         
-        self.__transform(video, audio, out_video) #合成音视频
-
+        # 获取视频名称
+        title = self.__get_title(info)
+        if title is None:
+            # 如果 __get_title 返回 None，使用 names[1] 去掉后缀作为备用名称
+            title = os.path.splitext(names[1])[0]
+        else:
+            print(f"视频名称解析成功: {title}")
+        out_video = os.path.join(abs_outfolder_path, title + '.mp4')
+        
+        #合成音视频
+        SUCCESS = self.__transform(video, audio, out_video) 
+        if SUCCESS is True:
+            self.send_message(f"SUCCESS: 「{title}」")
 
 ##=====================main(单独执行时使用)=====================
 def main():
