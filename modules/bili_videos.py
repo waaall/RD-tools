@@ -153,8 +153,9 @@ class BiliVideos(FilesBasic):
         self.__fix_m4s(abs_input_path, names[0]) #改音频文件
         self.send_message(f"正在处理音频文件：{names[0]}")
 
-        video = f"{abs_input_path}/o{names[1]}"
-        audio = f"{abs_input_path}/o{names[0]}"
+        # 名字要与__fix_m4s函数中out_file一致
+        video = f"{abs_input_path}/{self.middle_file_prefix}{names[1]}"
+        audio = f"{abs_input_path}/{self.middle_file_prefix}{names[0]}"
 
         info = abs_input_path + '/videoInfo.json'
         out_video = os.path.join(abs_outfolder_path, self.__get_title(info) + '.mp4')
