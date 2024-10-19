@@ -1,15 +1,16 @@
 ##===========================README============================##
 """ 
     create date:    20240801 
-    change date:    20240913
+    change date:    20241019
     creator:        zhengxu
     function:       用于批量文件处理的基类, 提供一些基本功能
     
-    version:        beta 3.0
+    version:        beta 4.0
     updates:        实现多线程:
                         「I/O密集型多个独立子任务,很适合用多线程,即使python多线程无法调用多核」
                     模块化更进一步:
                         很多情况下之需要重写single_file_handler方法就OK.
+                    pair函数提高实用性移到FilesBasic类
 """
 
 ##=========================用到的库==========================
@@ -174,6 +175,92 @@ class FilesBasic(QObject):
 
         # 如果一切正常, 返回 True
         return True
+
+    ##==========================配对文件==========================##
+    def pair_files(self, pairs_label, file_names, pre_or_suffix:bool = True, split_symbl:str = '-'):
+        """
+            param: pairs_label - 需要配对的一对字符串(除去相同部分)
+            param: pre_or_suffix - 前缀or后缀, True表示前缀;
+
+            return: pairs - 配对好的二维数组
+        """
+        max_pairs_lenth = len(pairs_label)
+        if max_pairs_lenth < 2:
+            self.send_messag(f"Error: pairs_label length is too short")
+            return []
+
+        if file_names is None:
+            return []
+        
+        # 对文件名排序, 这样配对能将O(n^2)优化到O(nlogn)
+        file_names.sort()
+        pairs = []
+        i = 0
+        while i < len(file_names):
+            # 分割文件名
+            file_name = file_names[i]
+            current_label, base_name = self._extract_label_and_base(file_name, pre_or_suffix, split_symbl)
+                
+            # 检查文件是否符合命名规则
+            if current_label not in pairs_label:
+                i += 1
+                self.send_message(f"Warning: not conform to the naming convention「{file_name}」skipped ")
+                continue
+
+            # # 直接到核心，配合下面j = i - max_pairs_lenth，实现确定的一个找多种可能的其他
+            if current_label != pairs_label[0]:
+                i += 1
+                continue
+
+            pair = [file_name]        
+
+            # 子循环(在排序后的位置上寻找配对的图像)
+            expected_label = [c for c in pairs_label if c != current_label]
+            j = i - max_pairs_lenth # 有可能在前面
+            while j < len(file_names) and expected_label:
+                co_label, co_base_name = self._extract_label_and_base(file_names[j], pre_or_suffix, split_symbl)
+
+                # 检查下一个文件的前缀是否符合期望的颜色，并匹配 base_name
+                if co_label in expected_label and co_base_name == base_name:
+                    pair.append(file_names[j])
+                    expected_label.remove(co_label)  # 匹配到一个颜色后, 从期望集合中移除
+                j += 1
+            
+            # 检查配对结果，并根据情况输出提示信息
+            if len(pair) == 1:
+                # 没有找到任何配对文件
+                self.send_message(f"Warning: Unmatched with {base_name}")
+            else:
+                pairs.append(pair)
+            
+            i += 1
+        return pairs
+
+    def _extract_label_and_base(self, file_name: str, pre_or_suffix: bool, split_symbl: str):
+        """
+        提取文件名的标签和基础名称（去掉扩展名的部分）。
+        Args:
+            file_name (str): 文件名字符串，包含要解析的标签和文件名。
+            pre_or_suffix (bool): 如果为 True，提取文件名前缀作为标签；如果为 False，提取文件名后缀作为标签。
+            split_symbl (str): 用于分割文件名的分隔符，决定从哪个符号处分割。
+        Returns:
+            Tuple[str, str]: 
+                - current_label (str): 提取的标签（前缀或后缀，取决于 pre_or_suffix 的值）。
+                - base_name (str): 文件名去掉扩展名后的基础名称。
+        """
+        
+        if pre_or_suffix:
+            # 提取前缀的情况
+            parts = file_name.split(split_symbl, 1)
+            current_label = parts[0]  # 取分隔符前面的部分作为标签
+            base_name, _, _ = parts[1].rpartition('.')  # 提取文件名去掉扩展名
+        else:
+            # 提取后缀的情况
+            parts = file_name.rsplit(split_symbl, 1)  # 使用 rsplit 从右边分割
+            current_label = parts[-1]  # 取最后一个部分作为标签
+            base_name = parts[0]  # 提取去掉扩展名的部分
+        
+        return current_label, base_name
 
 ##====================main(单独执行时使用)(示范)====================
 def main():

@@ -35,6 +35,7 @@ class BiliVideos(FilesBasic):
                  out_dir_prefix :str = 'videos-'):
         super().__init__()
         self.middle_file_prefix = middle_file_prefix
+        self.suffixs = ['.m4s']
 
     # 修复音视频文件
     def __fix_m4s(self, path: str, name: str, bufsize: int = 256*1024*1024) -> None:
@@ -69,7 +70,7 @@ class BiliVideos(FilesBasic):
             out_media.close()
     
     # 解析json文件, 获取标题, 将其返回
-    def __get_title(self, info):
+    def _get_title(self, info):
         if not os.path.exists(info):
             self.send_message(f"Warning: info 文件「{info}」不存在")
             return None
@@ -90,7 +91,7 @@ class BiliVideos(FilesBasic):
             return None
     
     # 转换合并函数
-    def __transform(self, v,a,o):
+    def _transform(self, v,a,o):
         if not os.path.exists(v) or not os.path.exists(a):
             self.send_message(f"Error: 视频文件「{v}」或音频文件「{a}」不存在，无法进行转换")
             return False
@@ -105,7 +106,7 @@ class BiliVideos(FilesBasic):
             return False
     
     # 获取m4s文件名
-    def __get_file_name(self, path, suffix):
+    def _get_file_name(self, path, suffix):
         files = [f for f in os.listdir(path) if f.endswith(suffix) 
                     and not f.startswith(self.middle_file_prefix)]
         
@@ -143,10 +144,16 @@ class BiliVideos(FilesBasic):
 
     ##========处理单个文件文件夹内的视频和音频，生成一个可播放的视频========##
     def single_video_handler(self, abs_input_path:str, abs_outfolder_path:str):
-        names = self.__get_file_name(abs_input_path, '.m4s')
+        names = self._get_file_name(abs_input_path, '.m4s')
         if not names:
             return
+        self._one_video_handler(abs_input_path, abs_outfolder_path, names)
 
+    ##================处理一对视频&音频，生成一个可播放的视频================##
+    def _one_video_handler(self, abs_input_path:str, abs_outfolder_path:str, names):
+        if len(names) != 2:
+            self.send_message("Error: 配对音视频文件个数不对")
+            return
         self.__fix_m4s(abs_input_path, names[1]) #改视频文件
         self.send_message(f"正在处理视频文件：{names[1]}")
 
@@ -160,16 +167,16 @@ class BiliVideos(FilesBasic):
         info = abs_input_path + '/videoInfo.json'
         
         # 获取视频名称
-        title = self.__get_title(info)
+        title = self._get_title(info)
         if title is None:
-            # 如果 __get_title 返回 None，使用 names[1] 去掉后缀作为备用名称
+            # 如果 _get_title 返回 None，使用 names[1] 去掉后缀作为备用名称
             title = os.path.splitext(names[1])[0]
         else:
             print(f"视频名称解析成功: {title}")
         out_video = os.path.join(abs_outfolder_path, title + '.mp4')
         
         #合成音视频
-        SUCCESS = self.__transform(video, audio, out_video) 
+        SUCCESS = self._transform(video, audio, out_video) 
         if SUCCESS is True:
             self.send_message(f"SUCCESS: 「{title}」")
 
@@ -206,7 +213,33 @@ def main():
     if not RESULT:
         bili_videos_generator.send_message("输入数字不在提供范围, 请重新运行")
 
+##=====================文件失效了,=====================
+def pair_mode():
+
+    work_folder = "/Volumes/zxTF256/neoScience_work/stm32"
+    
+    bili_videos_generator = BiliVideos()
+    bili_videos_generator.set_work_folder(work_folder)
+    
+    abs_in_path = '/Volumes/zxTF256/neoScience_work/stm32/m4s'
+    abs_out_path = '/Volumes/zxTF256/neoScience_work/stm32/stm32教程铁头山羊第四版'
+    file_names = bili_videos_generator._get_filenames_by_suffix(abs_in_path)
+
+    pairs_label = ['30280.m4s','30080.m4s', '100050.m4s', '30640.m4s']
+    pairs = bili_videos_generator.pair_files(pairs_label, file_names, pre_or_suffix = False)
+    
+    max_works = min(8, os.cpu_count(), len(pairs))
+    with ThreadPoolExecutor(max_workers=max_works) as executor:
+        for pair in pairs:
+            parts = pair[0].rsplit('-', 1)
+            base_name = parts[0]  
+            video = os.path.join(abs_in_path, pair[1])
+            audio = os.path.join(abs_in_path, pair[0])
+            out_v = os.path.join(abs_out_path, base_name + '.mp4')
+            executor.submit(bili_videos_generator._transform, video, audio, out_v)
+
 ##=========================调试用============================
 if __name__ == '__main__':
-    main()
+    # main()
+    pair_mode()
 
