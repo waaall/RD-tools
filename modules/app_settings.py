@@ -77,7 +77,7 @@ class AppSettings(QObject):
         for category in self.__main_categories:
             setting_map = self.get_setting_map(category)
             for name, options_path in setting_map.items():
-                _, path = self.extract_options_path(options_path)
+                _, path = self._extract_options_path(options_path)
                 value = self.get_value_from_path(path)
                 setattr(self, name, value)
 
@@ -87,7 +87,7 @@ class AppSettings(QObject):
         return getattr(self, setting_map_name, {})
 
     # 从 options_path 中提取 path 和 options
-    def extract_options_path(self, options_path: str):
+    def _extract_options_path(self, options_path: str):
         if isinstance(options_path[0], list):
             options = options_path[0]
             path = options_path[1:]
@@ -112,7 +112,7 @@ class AppSettings(QObject):
             setting_map = self.get_setting_map(category)
             options_path = setting_map.get(name)
             if options_path:
-                _, path = self.extract_options_path(options_path)
+                _, path = self._extract_options_path(options_path)
                 break
         if path:
             d = self.__settings_json

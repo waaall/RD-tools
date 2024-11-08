@@ -25,7 +25,7 @@ class HelpWindow(QWidget):
         buttonLayout.addWidget(self.userBut)
         buttonLayout.addWidget(self.devBut)
 
-        self.init_doc_browser()
+        self._init_doc_browser()
 
         # 将布局添加到主布局
         mainLayout.addLayout(buttonLayout)
@@ -34,7 +34,7 @@ class HelpWindow(QWidget):
         self.setGeometry(100, 100, 400, 600)
 
     # =====创建文档查看窗口======
-    def init_doc_browser(self):
+    def _init_doc_browser(self):
         # 显示文档的文本浏览器，支持 Markdown
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.doc_dir = os.path.join(base_dir, 'configs')
@@ -56,13 +56,13 @@ class HelpWindow(QWidget):
     def show_user_manual(self):
         manual_path = os.path.join(self.doc_dir, 'user_manual.md')
         # 显示使用手册的内容，可以是 Markdown 格式
-        self.display_markdown(manual_path)
+        self._display_markdown(manual_path)
 
     def show_develop_manual(self):
         manual_path = os.path.join(self.doc_dir, 'develop_manual.md')
-        self.display_markdown(manual_path)
+        self._display_markdown(manual_path)
 
-    def display_markdown(self, file_path):
+    def _display_markdown(self, file_path):
         # 检查文件是否存在并显示内容
         try:
             with open(file_path, 'r', encoding='utf-8') as file:

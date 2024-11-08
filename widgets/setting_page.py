@@ -94,7 +94,7 @@ class SettingWindow(QWidget):
         # 根据一级分类设置设置对应的显示组件
         for name, options_and_path in setting_map.items():
             # 使用提取函数
-            options, path = self.settings.extract_options_path(options_and_path)
+            options, path = self.settings._extract_options_path(options_and_path)
             # 获取设置值
             value = getattr(self.settings, name, None)
             # 确定控件类型

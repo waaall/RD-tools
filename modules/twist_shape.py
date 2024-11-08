@@ -48,10 +48,10 @@ class TwistImgs(FilesBasic):
         super().__init__()
 
         # 视角参数, 初始化顺序不能改变 (因为涉及到方法判断, 这个是默认方法)
-        self.init_viewer_pos_angles(viewer_pos_x, viewer_pos_y, vertical_angle, horizontal_angle)
+        self._init_viewer_pos_angles(viewer_pos_x, viewer_pos_y, vertical_angle, horizontal_angle)
 
         # 初始化变换后的四角坐标
-        self.init_twist_corner(twisted_corner)
+        self._init_twist_corner(twisted_corner)
 
         # 视线相对图片左下角位置 [x, y] 总长默认为10, 即最大[9,9]
         # 比如视线在图片中心为[5, 5], 左下角为[0, 9], 右下[9,9]
@@ -67,8 +67,8 @@ class TwistImgs(FilesBasic):
         self.log_folder_name = log_folder_name
         self.out_dir_prefix = out_dir_prefix
 
-    def init_viewer_pos_angles(self, viewer_pos_x: float, viewer_pos_y: float,
-                               vertical_angle: float, horizontal_angle: float):
+    def _init_viewer_pos_angles(self, viewer_pos_x: float, viewer_pos_y: float,
+                                vertical_angle: float, horizontal_angle: float):
         # 检查视线位置是否在有效范围内
         if not (0 <= viewer_pos_x <= 9):
             self.send_message(f"Error: Viewer position x must be 0-9 Given: {viewer_pos_x}")
@@ -94,7 +94,7 @@ class TwistImgs(FilesBasic):
         return True
 
     # ==================初始化并验证变换后的四角坐标==================
-    def init_twist_corner(self, twisted_corners):
+    def _init_twist_corner(self, twisted_corners):
         """
         example_twisted_corners =  [
                         [0, 0],     # 原图的左上

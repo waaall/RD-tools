@@ -60,7 +60,7 @@ class Com_Driver(QObject):
         self.stopbits: float = stopbits
 
         # 初始化连接参数
-        self.__init_connection_parms()
+        self._init_connection_parms()
 
         # 初始化通信
         if self.com_connect():
@@ -106,15 +106,22 @@ class Com_Driver(QObject):
             self.ser = None
             return False
 
-    def __init_connection_parms(self):
+    def _init_connection_parms(self,
+                               frame_header: int = 0xEF,
+                               max_frame_length: int = 32,
+                               min_frame_length: int = 5,
+                               max_listening_time: float = 10.0,
+                               rx_repeat_interval: float = 0.1,
+                               rx_idle_threshold: float = 0.5,
+                               is_listening: bool = False):
         # 初始化必要参数
-        self.__FRAME_HEADER: int = 0xEF
-        self._MAX_FRAME_LENGTH: int = 32
-        self._MIN_FRAME_LENGTH: int = 5  # 最小帧长
-        self._MAX_LISTENING_TIME: float = 10.0
-        self._RX_REPEAT_INTERVAL: float = 0.1
-        self._RX_IDLE_THRESHOLD: float = 0.5
-        self._is_listening: bool = False
+        self.__FRAME_HEADER: int = frame_header
+        self._MAX_FRAME_LENGTH: int = max_frame_length
+        self._MIN_FRAME_LENGTH: int = min_frame_length
+        self._MAX_LISTENING_TIME: float = max_listening_time
+        self._RX_REPEAT_INTERVAL: float = rx_repeat_interval
+        self._RX_IDLE_THRESHOLD: float = rx_idle_threshold
+        self._is_listening: bool = is_listening
 
         # 接收数据缓冲区
         self.__received_buffer = bytearray()
@@ -281,7 +288,6 @@ class Com_Driver(QObject):
                     self.stop_listening()
                     print("a health frame detected, to received_data_handler")
                     self.data_received_signal.emit(True, data_length)
-
                     break
 
             time.sleep(interval)

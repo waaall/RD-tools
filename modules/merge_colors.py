@@ -36,7 +36,7 @@ class MergeColors(FilesBasic):
                  out_dir_prefix: str = 'merge-'):
         super().__init__()
 
-        self.init_colors(colors)
+        self._init_colors(colors)
 
         # 需要处理的图片类型
         self.suffixs = ['.jpg', '.png', '.jpeg']
@@ -49,7 +49,7 @@ class MergeColors(FilesBasic):
         self.out_dir_prefix = out_dir_prefix
 
     # 设置分离的颜色,如果colors(统一大写)不为None且合法则使用,否则使用默认的RGB
-    def init_colors(self, colors):
+    def _init_colors(self, colors):
         # 定义可能的色彩通道, RGB顺序不能变, 跟pillow处理有关
         self.__default_colors = ['R', 'G', 'B']
         # 检查传入的 colors 是否有效
