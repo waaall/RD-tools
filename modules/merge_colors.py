@@ -1,18 +1,18 @@
-##===========================README============================##
-""" 
-    create date:    20240824 
+"""
+    ===========================README============================
+    create date:    20240824
     change date:    20240901
     creator:        zhengxu
     function:       批量搜索成对的R G B, 并把它们红绿通道合成为图片保存
 
     version:        beta 2.0
-    updates:    
+    updates:
 
     details:    实验的免疫荧光图片命名按照如下格式:R/G/B_开头,大小写敏感!
                 R_实验名-组名-视野编号.png
                 G_实验名-组名-视野编号.jpg
 """
-##=========================用到的库==========================##
+# =========================用到的库==========================
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -23,25 +23,27 @@ from PIL import Image
 # 获取当前脚本所在目录的父目录
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules.files_basic import FilesBasic
-##=========================================================
-##=======              合成图片色彩通道             =========
-##=========================================================
+
+
+# =========================================================
+# =======              合成图片色彩通道             =========
+# =========================================================
 class MergeColors(FilesBasic):
-    def __init__(self, 
-                 log_folder_name :str = 'merge_colors_log',
-                 frame_dpi :int = 200,
-                 colors = None,
-                 out_dir_prefix :str = 'merge-'):
+    def __init__(self,
+                 log_folder_name: str = 'merge_colors_log',
+                 frame_dpi: int = 200,
+                 colors=None,
+                 out_dir_prefix: str = 'merge-'):
         super().__init__()
 
         self.init_colors(colors)
-        
+
         # 需要处理的图片类型
         self.suffixs = ['.jpg', '.png', '.jpeg']
 
         # 设置导出图片dpi
         self.frame_dpi = (frame_dpi, frame_dpi)
-        
+
         # 设置导出图片文件夹的前缀名 & log文件夹名字
         self.log_folder_name = log_folder_name
         self.out_dir_prefix = out_dir_prefix
@@ -56,13 +58,13 @@ class MergeColors(FilesBasic):
             return
         invalid_colors = [c for c in colors if c not in self.__default_colors]
         if invalid_colors:
-            self.send_message(f"Warning: can not init colors, setting to {self.__default_colors}\n")
+            self.send_message(f"Warning: can not init colors, set to {self.__default_colors}\n")
             self.colors = sorted(self.__default_colors)
         else:
             self.colors = sorted(colors)
-    
-    ##=======================批量处理成对图片=======================##
-    def _data_dir_handler(self, _data_dir:str):
+
+    # =======================批量处理成对图片=======================
+    def _data_dir_handler(self, _data_dir: str):
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         img_names = self._get_filenames_by_suffix(_data_dir)
         pairs = self.pair_files(self.colors, img_names)
@@ -76,12 +78,12 @@ class MergeColors(FilesBasic):
         with ThreadPoolExecutor(max_workers=max_works) as executor:
             for images_pair in pairs:
                 executor.submit(self.image_merge, _data_dir, images_pair)
-    
-    ##======================合并图像并保存=======================##
-    def image_merge(self, _data_dir:str, images_pair):
+
+    # ======================合并图像并保存=======================
+    def image_merge(self, _data_dir: str, images_pair):
         output_name = images_pair[0].split('-', 1)[1]
         output_path = os.path.join(self.out_dir_prefix + _data_dir, output_name)
-        
+
         channel_map = {}        # 初始化通道字典,按RGB分别存储
         expected_size = None    # 用于存储期望的图像尺寸
 
@@ -97,63 +99,63 @@ class MergeColors(FilesBasic):
             if img.mode != 'RGB':
                 try:
                     img = img.convert('RGB')
-                except Exception as e:
+                except Exception:
                     self.send_message(f"Error:{img_name} failed converting to RGB Image")
 
             # 获取当前图片的"颜色"
             current_color = img_name.split('-', 1)[0]
-            
+
             # 检查图像的尺寸是否统一
             if expected_size is None:
                 expected_size = img.size  # 初始化期望尺寸
             elif img.size != expected_size:
                 self.send_message(f"Error: Not the same size:「{images_pair}」")
                 return
-            
+
             # 根据文件名前缀判断颜色并存储通道数据
             if current_color in self.__default_colors:
                 channel_map[current_color] = np.array(img)[:, :, 'RGB'.index(current_color)]
 
         # expected_size是图像的(width, height),需要转为 (height, width) 来与 NumPy 的图像数组维度一致
         reference_shape = (expected_size[1], expected_size[0])
-            
+
         # 按 RGB 顺序填充通道，如果缺失则填充为零
-        channels = [channel_map.get(c, np.zeros(reference_shape, dtype=np.uint8)) 
-                                    for c in self.__default_colors]
+        channels = [channel_map.get(c, np.zeros(reference_shape, dtype=np.uint8))
+                    for c in self.__default_colors]
 
         # 按 RGB 顺序合并通道
         merged_image = np.stack(channels, axis=-1)
         merged_image_f = Image.fromarray(merged_image.astype('uint8'))
-        
-        try: # 保存合并后的图像
-            merged_image_f.save(output_path, dpi = self.frame_dpi)
+
+        try:    # 保存合并后的图像
+            merged_image_f.save(output_path, dpi=self.frame_dpi)
             self.send_message(f"Saved merged image: {output_name}")
         except Exception as e:
             self.send_message(f"Error saving merged image: {str(e)}")
 
 
-##=====================main(单独执行时使用)=====================
+# =====================main(单独执行时使用)=====================
 def main():
     # 获取用户输入的路径
     input_path = input("请复制实验文件夹所在目录的绝对路径(若Python代码在同一目录, 请直接按Enter): \n")
-    
+
     # 判断用户是否直接按Enter，设置为当前工作目录
     if not input_path:
         work_folder = os.getcwd()
     elif os.path.isdir(input_path):
         work_folder = input_path
-    
+
     ColorsHandler = MergeColors()
     ColorsHandler.set_work_folder(work_folder)
     possble_dirs = ColorsHandler.possble_dirs
-    
+
     # 给用户显示，请用户输入index
     number = len(possble_dirs)
     ColorsHandler.send_message('\n')
     for i in range(number):
         print(f"{i}: {possble_dirs[i]}")
     user_input = input("\n请选择要处理的序号(用空格分隔多个序号): \n")
-    
+
     # 解析用户输入
     try:
         indices = user_input.split()
@@ -165,6 +167,7 @@ def main():
     if not RESULT:
         ColorsHandler.send_message("输入数字不在提供范围, 请重新运行")
 
-##=========================调试用============================
+
+# =========================调试用============================
 if __name__ == '__main__':
     main()

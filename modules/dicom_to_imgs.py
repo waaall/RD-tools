@@ -1,11 +1,11 @@
-##==========================README===========================##
 """
-    create date:    20240805 
+    ==========================README===========================
+    create date:    20240805
     change date:    20240913
     creator:        zhengxu
     function:       批量读取DICOM序列,并转换成图片和视频
 """
-##=========================用到的库==========================##
+# =========================用到的库==========================
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -31,15 +31,16 @@ if os.name == 'nt':  # 仅在 Windows 系统上执行
         # Python < 3.8 没有 os.add_dll_directory 方法，直接修改 PATH
         os.environ['PATH'] = f"{libs_dir};" + os.environ['PATH']
 
-##=========================================================
-##=======               DICOM导出图片              =========
-##=========================================================
+
+# =========================================================
+# =======               DICOM导出图片              =========
+# =========================================================
 class DicomToImage(FilesBasic):
-    def __init__(self, 
-                 log_folder_name :str = 'dicom_handle_log',
-                 fps :int = 10, 
-                 frame_dpi :int = 800, 
-                 out_dir_prefix :str = 'Img-'):
+    def __init__(self,
+                 log_folder_name: str = 'dicom_handle_log',
+                 fps: int = 10,
+                 frame_dpi: int = 800,
+                 out_dir_prefix: str = 'Img-'):
         super().__init__()
 
         # 重写父类suffixs,为dicom文件可能的后缀
@@ -51,8 +52,8 @@ class DicomToImage(FilesBasic):
         self.log_folder_name = log_folder_name
         self.out_dir_prefix = out_dir_prefix
 
-    ##=====================处理(单个数据文件夹)函数======================##
-    def _data_dir_handler(self, _data_dir:str):
+    # =====================处理(单个数据文件夹)函数======================
+    def _data_dir_handler(self, _data_dir: str):
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         seq_dirs = self.__check_dicomdir(_data_dir)
         if not seq_dirs:
@@ -61,7 +62,7 @@ class DicomToImage(FilesBasic):
         outfolder_name = self.out_dir_prefix + _data_dir
         os.makedirs(outfolder_name, exist_ok=True)
 
-        max_works = min(self.max_threads, os.cpu_count(), len(seq_dirs)*2)
+        max_works = min(self.max_threads, os.cpu_count(), len(seq_dirs) * 2)
         with ThreadPoolExecutor(max_workers=max_works) as executor:
             # 获取dicom序列文件名list,并多线程调用处理每个dicom序列
             for seq_dir in seq_dirs:
@@ -72,10 +73,15 @@ class DicomToImage(FilesBasic):
                 for seq in seqs_list:
                     abs_input_path = os.path.join(self._work_folder, _data_dir, seq_dir, seq)
                     abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-                    executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path, seq_dir_name = seq_dir)
-    
-    ##======================DICOM序列保存图片======================##
-    def single_file_handler(self,abs_input_path:str, abs_outfolder_path:str, seq_dir_name:str = 'none'):
+                    executor.submit(self.single_file_handler,
+                                    abs_input_path,
+                                    abs_outfolder_path,
+                                    seq_dir)
+
+    # ======================DICOM序列保存图片======================
+    def single_file_handler(self, abs_input_path: str,
+                            abs_outfolder_path: str,
+                            seq_dir_name: str = 'none'):
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):
             self.send_message("Error: failed to check_file_path")
@@ -93,15 +99,15 @@ class DicomToImage(FilesBasic):
 
         # 读取所有帧的图像数据
         pixel_array = ds.pixel_array
-        
+
         # 构建输出文件名
         seq_file_name = os.path.basename(abs_input_path)
-        seq_name, _ = os.path.splitext(seq_file_name)    #去掉后缀
+        seq_name, _ = os.path.splitext(seq_file_name)    # 去掉后缀
 
         # 视频写入初始化
         ref_height, ref_width = pixel_array[0].shape if num_frames > 1 else pixel_array.shape
         video_filename = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}.mp4')
-        
+
         # 检测视频文件是否存在，如果存在则删除
         if os.path.exists(video_filename):
             os.remove(video_filename)
@@ -119,28 +125,33 @@ class DicomToImage(FilesBasic):
                 if max_bit > min_bit:  # 防止除零错误
                     frame_data = (frame_data - min_bit) / (max_bit - min_bit) * 255
                 frame_data = frame_data.astype(np.uint8)
-    
+
             # 创建图像对象
             image = Image.fromarray(frame_data)
             # 帧图片输出文件名
-            image_filename = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}-frame_{i+1}.png')
-            ## 保存为 PNG 图片 # image.show()
+            image_filename = os.path.join(abs_outfolder_path,
+                                          f'seq_{seq_dir_name}-{seq_name}-frame_{i + 1}.png')
+            #  保存为 PNG 图片 # image.show()
             image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
-            
+
             # 初始化视频写入对象（仅在首次写入时创建）
             if video_writer is None and num_frames > 1:
                 height, width = frame_data.shape
                 # fourcc = cv2.VideoWriter_fourcc(*'H264') # H264 FFMPEG不兼容
                 fourcc = cv2.VideoWriter_fourcc(*'avc1')
-                video_writer = cv2.VideoWriter(video_filename, fourcc, self.fps, (width, height), isColor=False)
+                video_writer = cv2.VideoWriter(video_filename, fourcc, self.fps,
+                                               (width, height), False)
+
                 self.send_message(f'Video Detected: {abs_input_path}')
+
             # 如果有多帧，将帧写入视频
             if video_writer is not None:
                 height, width = frame_data.shape
                 # 如果不一致，调整尺寸
                 if (height, width) != (ref_height, ref_width):
                     self.send_message(f"Frame {i} size mismatch: resizing")
-                    frame_data = cv2.resize(frame_data, (ref_width, ref_height), interpolation=cv2.INTER_AREA)
+                    frame_data = cv2.resize(frame_data, (ref_width, ref_height),
+                                            interpolation=cv2.INTER_AREA)
                 # frame_bgr = cv2.cvtColor(frame_data, cv2.COLOR_GRAY2BGR) # isColor=False之后无需转换为彩色
                 video_writer.write(frame_data)
                 self.send_message(f'\t Frame {i} Writed')
@@ -153,12 +164,18 @@ class DicomToImage(FilesBasic):
             self.send_message(f'Image OUTPUT SUCCESS: {abs_input_path}')
         return
 
-    ##=====================找到DICOM序列文件夹列表======================##
+    # =====================找到DICOM序列文件夹列表======================
     def __check_dicomdir(self, _data_dir):
         try:
             items = os.listdir(_data_dir)
-            dicomdir_found = any(item == 'DICOMDIR' and os.path.isfile(os.path.join(_data_dir, item)) for item in items)
-            folder_list = [item for item in items if os.path.isdir(os.path.join(_data_dir, item)) and item != 'seq_imgs']
+            dicomdir_found = any(item == 'DICOMDIR'
+                                 and os.path.isfile(os.path.join(_data_dir, item))
+                                 for item in items)
+
+            folder_list = [item for item in items
+                           if os.path.isdir(os.path.join(_data_dir, item))
+                           and item != 'seq_imgs']
+
             if dicomdir_found:
                 return folder_list
             else:
@@ -168,28 +185,29 @@ class DicomToImage(FilesBasic):
             self.send_message(f"Error checking DICOMDIR: {e}")
             return None
 
-##=====================main(单独执行时使用)=====================
+
+# =====================main(单独执行时使用)=====================
 def main():
     # 获取用户输入的路径
     input_path = input("请复制实验文件夹所在目录的绝对路径(若Python代码在同一目录, 请直接按Enter): \n")
-    
+
     # 判断用户是否直接按Enter，设置为当前工作目录
     if not input_path:
         work_folder = os.getcwd()
     elif os.path.isdir(input_path):
         work_folder = input_path
-    
+
     DicomHandler = DicomToImage()
     DicomHandler.set_work_folder(work_folder)
     possble_dirs = DicomHandler.possble_dirs
-    
+
     # 给用户显示，请用户输入index
     number = len(possble_dirs)
     DicomHandler.send_message('\n')
     for i in range(number):
         print(f"{i}: {possble_dirs[i]}")
     user_input = input("\n请选择要处理的序号(用空格分隔多个序号): \n")
-    
+
     # 解析用户输入
     try:
         indices = user_input.split()
@@ -201,6 +219,7 @@ def main():
     if not RESULT:
         print("输入数字不在提供范围, 请重新运行")
 
-##=========================调试用============================
+
+# =========================调试用============================
 if __name__ == '__main__':
     main()

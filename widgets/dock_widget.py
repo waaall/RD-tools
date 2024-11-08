@@ -1,4 +1,5 @@
-import sys, time
+import sys
+
 from PySide6.QtGui import *
 # QPixmap, QPainter
 from PySide6.QtCore import *
@@ -6,14 +7,15 @@ from PySide6.QtCore import *
 from PySide6.QtWidgets import *
 # QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QTextEdit, QWidget
 
-##=========================================================
-##=======               导航窗口类                =========
-##=========================================================
+
+# =========================================================
+# =======               导航窗口类                =========
+# =========================================================
 class DockPage(QWidget):
     def __init__(self, group_names=None):
         super().__init__()
         main_layout = QVBoxLayout(self)
-        
+
         # 初始化各个「页面按钮」组
         self.group_names = []
         initial_group_names = group_names or ['settings_help', 'image_opt', 'file_opt']
@@ -32,7 +34,7 @@ class DockPage(QWidget):
         layout = QVBoxLayout(group)
         group.setLayout(layout)
         self.layout().addWidget(group)
-    
+
     # 向指定的组添加按钮并绑定点击事件
     def add_button(self, group_name, button_name, slot_func):
         # 遍历 main_layout 查找组名对应的 QGroupBox
@@ -46,8 +48,7 @@ class DockPage(QWidget):
         print(f"From DockPage:\n\t组 {group_name} 不存在\n")
 
 
-
-##===========================调试用==============================
+# ===========================调试用==============================
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     trial = DockPage()

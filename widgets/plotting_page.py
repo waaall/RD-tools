@@ -1,4 +1,6 @@
-import os, sys , random
+import random
+import sys
+
 # from PySide6.QtGui import *
 # # QPixmap, QIcon, QImage
 from PySide6.QtCore import *
@@ -7,11 +9,11 @@ from PySide6.QtWidgets import *
 # QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QLineEdit, QWidget
 from pyqtgraph import PlotWidget, mkPen
 
-##=========================================================
-##=======                图表制作界面               =========
-##=========================================================
 
-class PlottingWindow(QWidget):    
+# =========================================================
+# =======                图表制作界面               =========
+# =========================================================
+class PlottingWindow(QWidget): 
     def __init__(self):
         super().__init__()
 
@@ -67,13 +69,15 @@ class PlottingWindow(QWidget):
 
     def open_file(self):
         # 打开文件对话框
-        file_name, _ = QFileDialog.getOpenFileName(self, "打开文件", "", "All Files (*);;Text Files (*.txt)")
+        file_name, _ = QFileDialog.getOpenFileName(self, "打开文件", "",
+                                                   "All Files (*);;Text Files (*.txt)")
         if file_name:
             print(f"打开了文件: {file_name}")
 
     def save_file(self):
         # 保存文件对话框
-        file_name, _ = QFileDialog.getSaveFileName(self, "保存文件", "", "All Files (*);;Text Files (*.txt)")
+        file_name, _ = QFileDialog.getSaveFileName(self, "保存文件", "",
+                                                   "All Files (*);;Text Files (*.txt)")
         if file_name:
             print(f"保存到文件: {file_name}")
 
@@ -92,13 +96,15 @@ class PlottingWindow(QWidget):
         if len(self.data_buffer2) > self.max_buffer_size:
             self.data_buffer2 = self.data_buffer2[-self.max_buffer_size:]
         self.curve2.setData(self.data_buffer2)
-    
+
     def stop_plot(self):
         self.timer.stop()
 
     def start_plot(self):
         self.timer.start(50)
-##===============调试用==================
+
+
+# ===============调试用==================
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     trial = PlottingWindow()

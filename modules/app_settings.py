@@ -1,26 +1,30 @@
 """
-
-    create date:    20240828 
+    ==========================README===========================
+    create date:    20240828
     change date:    20240902
     creator:        zhengxu
     function:       设置参数的实时修改与保存
 
     version:        beta 2.0
     updates:        提升了模块化
-    
+
     details:
-                    1. 「设置项变量名称」要唯一, 
+                    1. 「设置项变量名称」要唯一,
                     2. 参数path[-1]的名字要与对应接收类的参数名一致
                     3. 参数path[-2]的名字要与对应接收类的类名一致
                     4. 增加设置**需要在 settings.json 和 AppSettings类中增加 **_Settingmap
 """
-import os, json
+import json
+import os
 from PySide6.QtCore import QObject, Signal
-##=========================================================
-##=======               软件设置参数类              =========
-##=========================================================
+
+
+# =========================================================
+# =======               软件设置参数类              =========
+# =========================================================
 class AppSettings(QObject):
     changed_signal = Signal(str, str, object)
+
     def __init__(self):
         super().__init__()
         """
@@ -65,7 +69,7 @@ class AppSettings(QObject):
         self.settings_file = os.path.join(base_dir, 'configs', 'settings.json')
         with open(self.settings_file, 'r') as file:
             self.__settings_json = json.load(file)
-        
+
         # 提取第一级键作为main_categories
         self.__main_categories = list(self.__settings_json.keys())
 
@@ -76,14 +80,14 @@ class AppSettings(QObject):
                 _, path = self.extract_options_path(options_path)
                 value = self.get_value_from_path(path)
                 setattr(self, name, value)
-    
+
     # 根据 category_name 动态获取对应的 Settingmap
-    def get_setting_map(self, category_name:str):
+    def get_setting_map(self, category_name: str):
         setting_map_name = f"{category_name}_Settingmap"
         return getattr(self, setting_map_name, {})
 
     # 从 options_path 中提取 path 和 options
-    def extract_options_path(self, options_path:str):
+    def extract_options_path(self, options_path: str):
         if isinstance(options_path[0], list):
             options = options_path[0]
             path = options_path[1:]
@@ -92,7 +96,7 @@ class AppSettings(QObject):
             path = options_path
         return options, path
 
-    def get_main_categories(self):       
+    def get_main_categories(self):
         return self.__main_categories
 
     def get_value_from_path(self, path):
@@ -102,7 +106,7 @@ class AppSettings(QObject):
         return d
 
     # 保存设置到文件
-    def save_settings(self, name:str, value):
+    def save_settings(self, name: str, value):
         # 遍历几个setting_map找到name,解析出path就break
         for category in self.__main_categories:
             setting_map = self.get_setting_map(category)
@@ -119,14 +123,13 @@ class AppSettings(QObject):
         else:
             print(f"From AppSettings:\n\tSetting '{name}' not found\n")
             return False
-        
+
         # 发送信号(类名,参数名和值), 通知设置修改
         self.changed_signal.emit(path[-2], path[-1], value)
         try:
             with open(self.settings_file, 'w') as file:
                 json.dump(self.__settings_json, file, indent=4)
                 return True
-        except:
+        except Exception:
             print(f"From AppSettings:\n\tError to save {name}-{value}\n")
             return False
-

@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 from PySide6.QtGui import QFont
 # # QPixmap, QIcon, QImage
 from PySide6.QtCore import *
@@ -6,14 +7,14 @@ from PySide6.QtCore import *
 from PySide6.QtWidgets import *
 # QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QLineEdit, QWidget
 
-##=========================================================
-##=======                 帮助界面                 =========
-##=========================================================
+
+# =========================================================
+# =======                 帮助界面                 =========
+# =========================================================
 class HelpWindow(QWidget):
-    
     def __init__(self):
         super().__init__()
-        
+
         # 主布局
         mainLayout = QVBoxLayout(self)
 
@@ -32,7 +33,7 @@ class HelpWindow(QWidget):
 
         self.setGeometry(100, 100, 400, 600)
 
-    ##=====创建文档查看窗口======
+    # =====创建文档查看窗口======
     def init_doc_browser(self):
         # 显示文档的文本浏览器，支持 Markdown
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,14 +41,13 @@ class HelpWindow(QWidget):
 
         self.textBrowser = QTextBrowser()
         self.textBrowser.setOpenExternalLinks(True)
-        self.textBrowser.setMinimumSize(350,500)
+        self.textBrowser.setMinimumSize(350, 500)
         self.show_user_manual()
         # 设置字体
         font = QFont()
         # font.setFamily("Arial")  # 设置字体名称
         font.setPointSize(15)    # 设置字体大小
         self.textBrowser.setFont(font)
-
 
         # 绑定按钮的点击事件到相应的函数
         self.userBut.clicked.connect(self.show_user_manual)
@@ -73,7 +73,8 @@ class HelpWindow(QWidget):
         except Exception as e:
             self.textBrowser.setMarkdown(f"Error reading file {file_path}: {str(e)}")
 
-##===========================调试用==============================
+
+# ===========================调试用==============================
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     trial = HelpWindow()

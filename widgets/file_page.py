@@ -1,4 +1,7 @@
-import os, sys, re
+import os
+import re
+import sys
+
 from PySide6.QtGui import *
 # # QPixmap, QIcon, QImage
 from PySide6.QtCore import *
@@ -6,11 +9,13 @@ from PySide6.QtCore import *
 from PySide6.QtWidgets import *
 # QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QLineEdit, QWidget
 
-##=========================================================
-##=======                文件操作界面               =========
-##=========================================================
+
+# =========================================================
+# =======                文件操作界面               =========
+# =========================================================
 class FileWindow(QWidget):
     selected_signal = Signal(str, list)
+
     def __init__(self):
         super().__init__()
 
@@ -18,32 +23,32 @@ class FileWindow(QWidget):
         self.__work_folder = os.getcwd()
         self.__work_folder_items = []
         self.__wanted_indexs = []
-        
-        #一个窗口的最小尺寸,分别代表左半和右半的最小宽度 & 上半和下半的最小高度
+
+        # 一个窗口的最小尺寸,分别代表左半和右半的最小宽度 & 上半和下半的最小高度
         self.window_minimum_size = [200, 300, 200, 200]
         mainLayout = QVBoxLayout()
         self.__init_workfolder_group()
         mainLayout.addWidget(self.workfolder_group)
-        
+
         self.__init_file_option_group()
         mainLayout.addWidget(self.file_option_group)
         self.setWindowTitle("文件窗口")
 
-        ##设置总的布局
+        # 设置总的布局
         self.setLayout(mainLayout)
 
     def __init_workfolder_group(self):
-        self.workfolder_group = QGroupBox("一:begin",self)
+        self.workfolder_group = QGroupBox("一:begin", self)
         group_layout = QHBoxLayout()
-        
+
         # 选择文件等操作的layout (group_layout:左select_layout右)
         select_layout = QVBoxLayout()
 
-        chooseFolderBut = QPushButton(f"1.选择工作目录", self)
+        chooseFolderBut = QPushButton("1.选择工作目录", self)
         select_layout.addWidget(chooseFolderBut)
         chooseFolderBut.clicked.connect(self.__get_work_folder)
-        
-        hint_lable1 = QLabel('2.请选择想要处理的序号:',self)
+
+        hint_lable1 = QLabel('2.请选择想要处理的序号:', self)
         hint_lable1.setMinimumWidth(self.window_minimum_size[0])
         select_layout.addWidget(hint_lable1)
 
@@ -51,7 +56,7 @@ class FileWindow(QWidget):
         self.__user_index.setMinimumWidth(self.window_minimum_size[0])
         select_layout.addWidget(self.__user_index)
 
-        self.get_select_file_but = QPushButton('3.提取选中序号',self)
+        self.get_select_file_but = QPushButton('3.提取选中序号', self)
         self.get_select_file_but.setMinimumWidth(self.window_minimum_size[0])
         self.get_select_file_but.clicked.connect(self.__get_work_folder_indexs)
         select_layout.addWidget(self.get_select_file_but)
@@ -65,15 +70,15 @@ class FileWindow(QWidget):
 
         self.__files_list_area = QPlainTextEdit(self)
         self.__files_list_area.setMinimumSize(self.window_minimum_size[0],
-                                                self.window_minimum_size[2])
+                                              self.window_minimum_size[2])
         self.__files_list_area.setReadOnly(True)
         group_layout.addWidget(self.__files_list_area, stretch=3)
-    
+
         self.workfolder_group.setLayout(group_layout)
 
-    ##===============创建文件的具体操作界面=================
+    # ===============创建文件的具体操作界面=================
     def __init_file_option_group(self):
-        self.file_option_group = QGroupBox('二:文件操作',self)
+        self.file_option_group = QGroupBox('二:文件操作', self)
         file_option_layout = QHBoxLayout(self)
 
         # 创建侧边栏
@@ -99,7 +104,7 @@ class FileWindow(QWidget):
         # 获取选中项目的索引，并切换到对应的页面
         index = self.sidebar.currentRow()
         self.file_options_stack.setCurrentIndex(index)
-        
+
         # 清空当前页面的 QPlainTextEdit
         for widget in self.file_options_stack.currentWidget().findChildren(QPlainTextEdit):
             widget.clear()
@@ -148,20 +153,21 @@ class FileWindow(QWidget):
                 result_display.appendPlainText(message)
                 try:
                     result_display.moveCursor(QPlainTextEdit().textCursor().End)
-                except:
+                except Exception:
                     result_display.moveCursor(QTextCursor.End)
 
     def __get_work_folder(self):
-        self.__work_folder = QFileDialog.getExistingDirectory(self,"选择目录","./")
-        
+        self.__work_folder = QFileDialog.getExistingDirectory(self, "选择目录", "./")
+
         # 检查是否选择了有效的目录
         if not self.__work_folder:
             # 用户取消选择或者未选择有效目录，提示用户
-            print(f"From FileWindow:\n\tError: 未选择目录")
+            print("From FileWindow:\n\tError: 未选择目录")
             return  # 退出函数，避免后续错误
-        
-        self.__work_folder_items = [f for f in os.listdir(self.__work_folder) if not f.startswith('.')]
-        
+
+        self.__work_folder_items = [f for f in os.listdir(self.__work_folder)
+                                    if not f.startswith('.')]
+
         # 构建显示的字符串内容
         content = "当前目录内文件为:\n\n"
         for i, item in enumerate(self.__work_folder_items):
@@ -197,12 +203,14 @@ class FileWindow(QWidget):
         self.select_index_result_label.setText('成功提取序号, 可以进行文件操作')
         self.selected_signal.emit(self.__work_folder, wanted_items)
 
-##===========================调试用==============================
+
+# ===========================调试用==============================
 def simple_main():
     app = QApplication(sys.argv)
     window = FileWindow()
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == '__main__':
     simple_main()
