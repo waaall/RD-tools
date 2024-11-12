@@ -21,13 +21,14 @@ def build_executable():
     current_platform = platform.system()
 
     if current_platform == "Windows":
-        # Windows 平台的 PyInstaller 命令
+        # pyinstaller --onedir --windowed --collect-submodules=pydicom --hidden-import=cv2 --add-data "libs/openh264-1.8.0-win64.dll;libs" --name=Branden_RD_Tool main.py
+        # Windows 平台的 PyInstaller 命令 # "--add-data", "libs/openh264-1.8.0-win64.dll;.",  # dll添加到 exe 同一目录
         subprocess.check_call([sys.executable, "-m", "PyInstaller",
                                "--onedir",  # 生成一个文件夹,内部包含所有运行所需文件
                                "--windowed",
+                               "--hidden-import=cv2",
                                "--collect-submodules=pydicom", # 确保 pydicom 所需模块被包含
                                "--add-data", "libs/openh264-1.8.0-win64.dll;libs",  # dll添加到 libs 文件夹
-                               "--add-data", "libs/openh264-1.8.0-win64.dll;.",  # dll添加到 exe 同一目录
                                "--name=Branden_RD_Tool",
                                "main.py"])
     elif current_platform == "Darwin":
@@ -35,6 +36,7 @@ def build_executable():
         subprocess.check_call([sys.executable, "-m", "PyInstaller",
                                "--onefile",  # 生成一个单独的可执行文件
                                "--windowed",
+                               "--hidden-import=cv2",
                                "--collect-submodules=pydicom", # 确保 pydicom 所需模块被包含
                                "--name=Branden_RD_Tool",
                                "main.py"])
@@ -46,6 +48,7 @@ def build_executable():
                                    "--icon=/resources/branden.ico",  # 图标路径
                                    "--add-data", "/resources/branden.ico:./",  # 添加数据
                                    "--hidden-import=pydicom",  # 确保 pydicom 模块被包含
+                                   "--hidden-import=cv2",
                                    "--collect-submodules=pydicom",
                                    "--name=Branden_RD_Tool",
                                    "main.py"])
