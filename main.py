@@ -73,7 +73,8 @@ def main():
     window.SettingWindow.settings.changed_signal.connect(dicom_bind.update_setting)
 
     # =============================绑定SplitColors=============================
-    split_color_bind = BatchFilesBinding(SplitColors(), '分离颜色通道')
+    # 初始化绑定,初始化可以直接设置需要的颜色通道: colors=["R", "G", "B"]
+    split_color_bind = BatchFilesBinding(SplitColors(colors=["R", "G"]), '分离颜色通道')
     window.FileWindow.selected_signal.connect(split_color_bind.update_user_select)
     split_color_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(split_color_bind.bind_name,
