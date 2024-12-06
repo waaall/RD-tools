@@ -1,8 +1,8 @@
 """
 pyside6问题:
     windows平台确实dll, pyinstaller之前找到C/windows/system32/downlevel加入环境变量
-    
-dicom_to_imgs问题: 
+
+dicom_to_imgs问题:
     pydicom的依赖无法自动加入, 所以需要pyinstaller指定
     opencv-python有一些问题, 尤其是windows缺少dll, (需要单独运行该代码terminal显示错误信息)
                 需要https://github.com/cisco/openh264/releases下载指定版本并加入dlllib修复
@@ -13,12 +13,15 @@ import subprocess
 import platform
 import sys
 
+
 def install_requirements():
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+
 
 def build_executable():
     # 检测操作系统
     current_platform = platform.system()
+    print(f"current_platform: {current_platform}")
 
     if current_platform == "Windows":
         # pyinstaller --onedir --windowed --collect-submodules=pydicom --hidden-import=cv2 --add-data "libs/openh264-1.8.0-win64.dll;libs" --name=Branden_RD_Tool main.py
@@ -52,9 +55,31 @@ def build_executable():
                                    "--collect-submodules=pydicom",
                                    "--name=Branden_RD_Tool",
                                    "main.py"])
-        raise Exception("Unsupported operating system")
+        except Exception as e:
+            print(f"Unsupported operating system: {e}")
+
+
+def main() -> None:
+    while True:
+        print("select wanted function:")
+        print("\t1. Install Requirements")
+        print("\t2. Build Executable")
+        print("\t3. Exit")
+
+        try:
+            choice = int(input("Enter the corresponding number:"))
+            if choice == 1:
+                install_requirements()
+            elif choice == 2:
+                build_executable()
+            elif choice == 3:
+                print("exit")
+                break
+            else:
+                print("\n\tError: Invalid option. Please try again.\n")
+        except ValueError:
+            print("\n\tError: Invalid input. Please enter a valid number.\n")
 
 
 if __name__ == "__main__":
-    install_requirements()
-    build_executable()
+    main()

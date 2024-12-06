@@ -23,9 +23,7 @@
   - File Window：用于批量操作多个文件夹
   - Atom File Opt Window：用于调试单个文件夹内的操作（调试成功后集成到File Window）
 
-
 # 2. 应用
-
 
 ## 2.1 File Opt
 
@@ -46,6 +44,6 @@
 
 #### 2.1.1.2 CTL处理
 
-在terminal中直接运行modules文件夹中的dicom_to_imgs.py文件，可以有UI相同的处理逻辑。
+在terminal中直接运行modules文件夹中的dicom_to_imgs.py文件，其与UI是相同的处理逻辑。
 
 进一步来讲，如果想定制操作逻辑，比如你的DICOM文件结构和我假设的不同，可以重写dicom_to_imgs.py中最后的main函数，调用DicomToImage类、file_basic.py中基类的函数，实现针对你特殊文件结构中dicom文件的批量处理。

@@ -51,15 +51,15 @@ class SplitColors(FilesBasic):
 
         # 设置分离的色彩，如果 colors 不为 None 且合法则使用，否则使用默认的 RGB
         if colors is None:
-            self.colors = self.__default_colors
+            self._colors = self.__default_colors
         else:
             # 检查传入的 colors 是否有效
             invalid_colors = [c for c in colors if c not in self.__default_colors]
             if invalid_colors:
                 self.send_message(f"Warning: can not init colors, set to {self.__default_colors}")
-                self.colors = self.__default_colors
+                self._colors = self.__default_colors
             else:
-                self.colors = colors
+                self._colors = colors
 
     # ======================分离单张图片色彩======================
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
@@ -83,7 +83,7 @@ class SplitColors(FilesBasic):
             # 创建空图像模板,全黑的灰度图像,大小与原图相同
             black = Image.new('L', img.size)
 
-            for color in self.colors:
+            for color in self._colors:
                 # 获取通道索引
                 color_index = self.__default_colors.index(color)
 

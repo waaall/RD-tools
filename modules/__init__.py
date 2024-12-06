@@ -26,3 +26,5 @@ from .twist_shape import TwistImgs
 
 # bilibili videos
 from .bili_videos import BiliVideos
+
+from .serial_plot import SerialPlot

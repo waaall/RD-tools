@@ -54,20 +54,20 @@ class MergeColors(FilesBasic):
         self.__default_colors = ['R', 'G', 'B']
         # 检查传入的 colors 是否有效
         if colors is None:
-            self.colors = sorted(self.__default_colors)
+            self._colors = sorted(self.__default_colors)
             return
         invalid_colors = [c for c in colors if c not in self.__default_colors]
         if invalid_colors:
             self.send_message(f"Warning: can not init colors, set to {self.__default_colors}\n")
-            self.colors = sorted(self.__default_colors)
+            self._colors = sorted(self.__default_colors)
         else:
-            self.colors = sorted(colors)
+            self._colors = sorted(colors)
 
     # =======================批量处理成对图片=======================
     def _data_dir_handler(self, _data_dir: str):
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         img_names = self._get_filenames_by_suffix(_data_dir)
-        pairs = self.pair_files(self.colors, img_names)
+        pairs = self.pair_files(self._colors, img_names)
         if not pairs:
             self.send_message(f"Error: No images in {_data_dir}")
             return

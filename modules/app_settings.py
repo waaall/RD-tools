@@ -28,8 +28,9 @@ class AppSettings(QObject):
     def __init__(self):
         super().__init__()
         """
-            定义「设置项变量名称」到设置路径的映射, 附加选项在value第一项(如果有)
-            **_Settingmap 命名要与json key 和 value的path[0]一致
+            1. 定义「设置项变量名称」到设置路径的映射, 附加选项在value第一项(如果有)
+            2. **_Settingmap 命名要与 json key 和 value 的 path[0] 一致
+            3. 如果是类相关的设置, 要与类名一致和对应的变量名一致，如"DicomToImage", "fps"
         """
         self.General_Settingmap = {
             "language":         (["English", "French", "Spanish"], "General", "language"),
