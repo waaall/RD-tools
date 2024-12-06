@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import cv2
 import pydicom
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 # 获取当前文件所在目录,并加入系统环境变量(临时)
 current_dir = os.path.dirname(os.path.abspath(__file__))

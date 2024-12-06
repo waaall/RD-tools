@@ -49,8 +49,8 @@ def main():
     window = MainWindow()
 
     # ==========================绑定mergecolors==========================
-    # 初始化绑定
-    merge_colors_bind = BatchFilesBinding(MergeColors(), '颜色通道合成')
+    # 初始化绑定,初始化可以直接设置需要的颜色通道: colors=["R", "G", "B"]
+    merge_colors_bind = BatchFilesBinding(MergeColors(colors=["R", "G"]), '颜色通道合成')
 
     # FileWindow信号数据selected_signal传入绑定对象merge_colors_bind
     window.FileWindow.selected_signal.connect(merge_colors_bind.update_user_select)
@@ -90,6 +90,7 @@ def main():
     window.SettingWindow.settings.changed_signal.connect(twist_shape_bind.update_setting)
 
     # =============================绑定BiliVideo=============================
+    # 初始化绑定,初始化可以直接设置需要的颜色通道: colors=["R", "G", "B"]
     split_color_bind = BatchFilesBinding(BiliVideos(), 'B站视频导出')
     window.FileWindow.selected_signal.connect(split_color_bind.update_user_select)
     split_color_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
