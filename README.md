@@ -32,7 +32,7 @@ NOTICE: if you change the code, maybe have errors when you running `git pull` co
 
 ## How to Use
 
- start this app by running the following command in terminal.
+ start this app by running the following command in terminal. 
 
 ```bash
 python main.py
