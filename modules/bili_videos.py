@@ -80,13 +80,25 @@ class BiliVideos(FilesBasic):
             with open(info, 'r', encoding='utf8') as f:
                 info_data = load(f)
 
+            title = ''
+            # 检查 info 文件中是否有 'groupTitle' 字段
+            if 'groupTitle' not in info_data:
+                self.send_message(f"Warning: info 文件「{info}」中缺少 'groupTitle' 字段")
+            else:
+                title += info_data['groupTitle']
+                # 检查 info 文件中是否有 'p' 字段
+                if 'p' not in info_data:
+                    self.send_message(f"Warning: info 文件「{info}」中缺少 'p' 字段")
+                else:
+                    p_str = '-' + str(info_data['p']) + '-'
+                    title += p_str
             # 检查 info 文件中是否有 'title' 字段
             if 'title' not in info_data:
                 self.send_message(f"Warning: info 文件「{info}」中缺少 'title' 字段")
-                return None
-
-            title = info_data['title']
+            else:
+                title += info_data['title']
             return title
+
         except Exception as e:
             self.send_message(f"Warning: info文件解析错误: {str(e)}")
             return None
@@ -244,5 +256,5 @@ def pair_mode():
 
 # =========================调试用============================
 if __name__ == '__main__':
-    # main()
-    pair_mode()
+    main()
+    # pair_mode()
