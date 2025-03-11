@@ -75,20 +75,20 @@ class DicomToImage(FilesBasic):
                     abs_input_path = os.path.join(self._work_folder, _data_dir, seq_dir, seq)
                     abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
                     futures.append(executor.submit(self.single_file_handler,
-                                    abs_input_path,
-                                    abs_outfolder_path,
-                                    seq_dir))
-            
+                                   abs_input_path,
+                                   abs_outfolder_path,
+                                   seq_dir))
+
             # 等待所有任务完成
             for future in futures:
                 future.result()
-        
+
         # 所有线程处理完成后，使用FFmpeg生成视频
         abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-        self.send_message(f"所有DICOM文件处理完成，开始生成视频...")
+        self.send_message("所有DICOM文件处理完成, 开始生成视频...")
         self._generate_videos_with_ffmpeg(abs_outfolder_path)
-        self.send_message(f"视频生成完成")
-        
+        self.send_message("视频生成完成")
+
         return True
 
     # ======================DICOM序列保存图片======================
@@ -125,6 +125,25 @@ class DicomToImage(FilesBasic):
         if os.path.exists(video_filename):
             os.remove(video_filename)
 
+        # 初始化视频写入对象
+        if num_frames > 1:
+            # 设置保存帧图片的目录，用于后续FFmpeg处理
+            frames_dir = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}_frames')
+            os.makedirs(frames_dir, exist_ok=True)
+
+            # 记录视频信息，稍后由FFmpeg处理
+            video_info = {
+                'frames_dir': frames_dir,
+                'output_video': video_filename,
+                'fps': self.fps,
+                'width': ref_width,
+                'height': ref_height
+            }
+            # 将信息保存到文件中，以便后续处理
+            with open(os.path.join(frames_dir, 'video_info.json'), 'w') as f:
+                import json
+                json.dump(video_info, f)
+
         # 遍历每一帧, 保存为 PNG 图片
         for i in range(num_frames):
             # 提取当前帧的图像数据 # 如果视频帧为1, 则pixel_array不是一个数组, 所以要直接赋值
@@ -140,29 +159,14 @@ class DicomToImage(FilesBasic):
 
             # 创建图像对象
             image = Image.fromarray(frame_data)
-
-            # 初始化视频写入对象（仅在首次写入时创建）
-            if num_frames > 1:
-                # 设置保存帧图片的目录，用于后续FFmpeg处理
-                frames_dir = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}_frames')
-                os.makedirs(frames_dir, exist_ok=True)
+            if num_frames == 1:
+                image_filename = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}.png')
+                image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
+                self.send_message(f'单帧 DICOM 图像已保存到 {image_filename}')
+            else:
                 # 修改帧图片保存路径
                 image_filename = os.path.join(frames_dir, f'frame_{i + 1:04d}.png')
                 image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
-
-                # 记录视频信息，稍后由FFmpeg处理
-                video_info = {
-                    'frames_dir': frames_dir,
-                    'output_video': video_filename,
-                    'fps': self.fps,
-                    'width': ref_width,
-                    'height': ref_height
-                }
-                # 将信息保存到文件中，以便后续处理
-                with open(os.path.join(frames_dir, 'video_info.json'), 'w') as f:
-                    import json
-                    json.dump(video_info, f)
-                
                 self.send_message(f'视频帧已保存到 {frames_dir}，将在处理完成后生成视频')
 
     # =====================找到DICOM序列文件夹列表======================
@@ -192,15 +196,15 @@ class DicomToImage(FilesBasic):
         import json
         import subprocess
         import shutil
-        
+
         # 首先检查FFmpeg是否可用
         ffmpeg_path = shutil.which('ffmpeg')
         if not ffmpeg_path:
             self.send_message("错误: 系统中未找到FFmpeg。请安装FFmpeg后再试。")
             return
-            
+
         self.send_message(f"使用系统FFmpeg: {ffmpeg_path}")
-        
+
         # 查找所有保存了视频信息的目录
         for root, dirs, files in os.walk(output_folder):
             for file in files:
@@ -209,11 +213,11 @@ class DicomToImage(FilesBasic):
                     try:
                         with open(info_path, 'r') as f:
                             video_info = json.load(f)
-                        
+
                         frames_dir = video_info['frames_dir']
                         output_video = video_info['output_video']
                         fps = video_info['fps']
-                        
+
                         # 检查帧图像是否存在
                         frame_pattern = os.path.join(frames_dir, 'frame_*.png')
                         import glob
@@ -221,7 +225,7 @@ class DicomToImage(FilesBasic):
                         if not frames:
                             self.send_message(f"警告: 未找到帧图像: {frame_pattern}")
                             continue
-                            
+
                         self.send_message(f"找到 {len(frames)} 个帧图像，开始生成视频")
                     except Exception as e:
                         self.send_message(f'处理视频信息时出错: {str(e)}')
