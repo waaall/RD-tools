@@ -35,7 +35,7 @@ from modules.files_basic import FilesBasic
 class ECGHandler(FilesBasic):
     def __init__(self,
                  log_folder_name: str = 'ecg_handler_log',
-                 sampling_rate: int = 1000,         # 1kHz (1ms sampling)
+                 sampling_rate: int = 1000,         # 1kHz(1ms)需要大于100Hz
                  parallel: bool = False,
                  out_dir_prefix: str = 'ecg-',
                  filter_low_cut: float = 0.5,       # 滤波器低频截止
@@ -256,7 +256,7 @@ class ECGHandler(FilesBasic):
             ax[1].plot(filtered_time[start_idx_filt:end_idx_filt],
                        filtered_data[start_idx_filt:end_idx_filt], 'r-')
             ax[1].set_title(f'Filtered ECG Signal ({self.filter_low_cut}-{self.filter_high_cut}Hz)'+
-                           (f' (Trimmed)' if self.trim_filtered_data else ''))
+                            (f' (Trimmed)' if self.trim_filtered_data else ''))
             ax[1].set_xlabel('Time (s)')
             ax[1].set_ylabel('ADC Value')
             ax[1].grid(True)
@@ -325,8 +325,9 @@ class ECGHandler(FilesBasic):
         freq_ranges = [
             (0.01, 1, "0.01-1Hz"),
             (0.5, 5, "0.5-5Hz"),
+            (0.5, 30, "0.5-30Hz"),
         ]
-        if nyquist_freq < 100:
+        if nyquist_freq < 100 and nyquist_freq >= 60:
             freq_ranges.append((0.5, max_freq, f"0.5-{max_freq}Hz"))
         if nyquist_freq >= 100:
             freq_ranges.append((0.5, 100, "0.5-100Hz"))
