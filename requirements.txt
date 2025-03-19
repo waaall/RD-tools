@@ -1,8 +1,11 @@
 numpy
+pandas
+matplotlib
+scipy
+PySide6
 pillow
 pyserial
 pydicom
-matplotlib
-PySide6
 opencv-python
 pyqtgraph
+faster_whisper

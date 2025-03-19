@@ -10,10 +10,9 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-import cv2
 import pydicom
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 # 获取当前文件所在目录,并加入系统环境变量(临时)
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -160,7 +159,8 @@ class DicomToImage(FilesBasic):
             # 创建图像对象
             image = Image.fromarray(frame_data)
             if num_frames == 1:
-                image_filename = os.path.join(abs_outfolder_path, f'seq_{seq_dir_name}-{seq_name}.png')
+                image_filename = os.path.join(abs_outfolder_path,
+                                              f'seq_{seq_dir_name}-{seq_name}.png')
                 image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
                 self.send_message(f'单帧 DICOM 图像已保存到 {image_filename}')
             else:

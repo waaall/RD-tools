@@ -6,8 +6,9 @@
     function:       批量处理ECG数据并生成图表
     details:        _data_dir为CSV文件夹,内部的文件夹为子任务
 
-    version:        beta 2.0
+    version:        beta 3.0
     updates:        继承FilesBasic类,实现多线程
+                    实现数字滤波
 """
 # =========================用到的库==========================
 import os
