@@ -1,12 +1,12 @@
 """
     ===========================README============================
-    create date:    20240801
-    change date:    20241019
+    create date:    20250318
+    change date:    20250319
     creator:        zhengxu
     function:       批量处理ECG数据并生成图表
     details:        _data_dir为CSV文件夹,内部的文件夹为子任务
 
-    version:        beta 4.0
+    version:        beta 2.0
     updates:        继承FilesBasic类,实现多线程
 """
 # =========================用到的库==========================
@@ -80,7 +80,8 @@ class ECGHandler(FilesBasic):
         # 获取文件名（不含扩展名）并创建对应的输出文件夹
         file_name = os.path.basename(abs_input_path)
         base_name = os.path.splitext(file_name)[0]
-        abs_outfolder_path = os.path.join(self._work_folder,_data_dir, self.out_dir_prefix + base_name)
+        abs_outfolder_path = os.path.join(self._work_folder, _data_dir,
+                                          self.out_dir_prefix + base_name)
         os.makedirs(abs_outfolder_path, exist_ok=True)
 
         self.send_message(f"处理CSV文件: {file_name}")
@@ -109,7 +110,7 @@ class ECGHandler(FilesBasic):
         time_ranges = [
             (0, 3, "3s"),
             (0, 10, "10s"),
-            (0, len(data)/self.sampling_rate, "full")
+            (0, len(data) / self.sampling_rate, "full")
         ]
 
         for start_time, end_time, suffix in time_ranges:
@@ -135,11 +136,11 @@ class ECGHandler(FilesBasic):
         # 计算FFT
         n = len(data)
         yf = fft(data)
-        xf = fftfreq(n, 1/self.sampling_rate)
+        xf = fftfreq(n, 1 / self.sampling_rate)
 
         # 只取正频率部分
-        positive_freq = xf[:n//2]
-        amplitude = 2.0/n * np.abs(yf[:n//2])
+        positive_freq = xf[:n // 2]
+        amplitude = 2.0 / n * np.abs(yf[:n // 2])
 
         # 定义不同频率范围
         freq_ranges = [
@@ -203,4 +204,4 @@ def main():
 
 # =========================调试用============================
 if __name__ == '__main__':
-    main() 
+    main()

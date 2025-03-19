@@ -24,6 +24,12 @@ from .split_colors import SplitColors
 # twist_imgs
 from .twist_shape import TwistImgs
 
+# ECG_handler
+from .ECG_handler import ECGHandler
+
+# gen_subtitles
+from .gen_subtitles import GenSubtitles
+
 # bilibili videos
 from .bili_videos import BiliVideos
 

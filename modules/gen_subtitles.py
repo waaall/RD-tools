@@ -29,6 +29,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
 
+home = os.environ.get("HOME")  # 获取 $HOME 环境变量
+global_model_path = os.path.join(home, "Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin")
+
 
 # =========================================================
 # =======               视频字幕生成类              =========
@@ -36,7 +39,7 @@ from modules.files_basic import FilesBasic
 class GenSubtitles(FilesBasic):
     def __init__(self,
                  log_folder_name: str = 'gen_subtitles_log',
-                 model_path: str = "$HOME/Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin",
+                 model_path: str = global_model_path,
                  compute_type: str = "auto",
                  parallel: bool = False):
         """
