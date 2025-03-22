@@ -30,6 +30,9 @@ from .ECG_handler import ECGHandler
 # gen_subtitles
 from .gen_subtitles import GenSubtitles
 
+# sum_subtitles
+from .sum_subtitles import SumSubtitles
+
 # bilibili videos
 from .bili_videos import BiliVideos
 

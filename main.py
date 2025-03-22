@@ -114,6 +114,14 @@ def main():
                                          gen_subtitles_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(gen_subtitles_bind.update_setting)
 
+    # =============================绑定SumSubtitles=============================
+    sum_subtitles_bind = BatchFilesBinding(SumSubtitles(), '视频字幕总结')
+    window.FileWindow.selected_signal.connect(sum_subtitles_bind.update_user_select)
+    sum_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
+    window.FileWindow.add_file_operation(sum_subtitles_bind.bind_name,
+                                         sum_subtitles_bind.handler_binding)
+    window.SettingWindow.settings.changed_signal.connect(sum_subtitles_bind.update_setting)
+
     # =============================app运行=============================
     window.show()
     sys.exit(app.exec())

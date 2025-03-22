@@ -1,7 +1,7 @@
 """
     ===========================README============================
     create date:    20250201
-    change date:    20250319
+    change date:    20250321
     creator:        zhengxu
     function:       批量生成视频字幕
     details:        _data_dir为视频文件夹,内部的文件夹为子任务
@@ -13,11 +13,12 @@
 import os
 import sys
 import shutil
+import json
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor
 
-# 尝试导入faster-whisper库，但不强制要求
+# 尝试导入faster-whisper库, 但不强制要求
 try:
     from faster_whisper import WhisperModel
     has_faster_whisper = True
@@ -29,9 +30,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
 
-home = os.environ.get("HOME")  # 获取 $HOME 环境变量
-global_model_path = os.path.join(home, "Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin")
-
 
 # =========================================================
 # =======               视频字幕生成类              =========
@@ -39,7 +37,7 @@ global_model_path = os.path.join(home, "Develop/whisper_models/ggml-large-v3-tur
 class GenSubtitles(FilesBasic):
     def __init__(self,
                  log_folder_name: str = 'gen_subtitles_log',
-                 model_path: str = global_model_path,
+                 model_path: str = "",
                  compute_type: str = "auto",
                  parallel: bool = False):
         """
@@ -48,7 +46,7 @@ class GenSubtitles(FilesBasic):
         Args:
             log_folder_name: 日志文件夹名称
             model_path: Whisper模型名称或路径
-            compute_type: 计算类型，可选 "auto", "int8", "int8_float16", "int16", "float16", "float32"
+            compute_type: 计算类型, 可选 "auto", "int8", "int8_float16", "int16", "float16", "float32"
             parallel: 是否使用并行处理
             out_dir_prefix: 输出文件夹前缀
         """
@@ -69,13 +67,22 @@ class GenSubtitles(FilesBasic):
         """检查必需的工具是否存在"""
         # 检查ffmpeg
         if not shutil.which("ffmpeg"):
-            raise RuntimeError("错误: 未找到ffmpeg命令. 请先安装ffmpeg. ")
+            raise RuntimeError("Error: 未找到ffmpeg命令. 请先安装ffmpeg.")
 
-        # 如果既没有whisper-cli也没有faster-whisper库，则报错
+        # 检查是否有whisper-cli或faster-whisper库
         if not self.has_whisper_cli and not has_faster_whisper:
-            raise RuntimeError("错误: 未找到whisper-cli命令或faster-whisper库. 请至少安装其中一个. ")
+            self.send_message("Error: 未找到whisper-cli或faster-whisper.请至少安装一个.")
+            return
 
-        # 如果没有whisper-cli，则加载faster-whisper模型
+        # 验证和确定模型路径
+        valid_model_path = self._validate_model_path()
+        if valid_model_path is None:
+            self.send_message("Error: 无法找到有效的Whisper模型文件.")
+            return
+
+        self.model_path = valid_model_path
+
+        # 如果没有whisper-cli, 则加载faster-whisper模型
         if not self.has_whisper_cli and has_faster_whisper:
             self.send_message("未检测到whisper-cli, 使用faster-whisper库")
             self.send_message(f"正在加载Whisper模型 '{self.model_path}'...")
@@ -83,10 +90,58 @@ class GenSubtitles(FilesBasic):
                 self.model = WhisperModel(self.model_path, compute_type=self.compute_type)
                 self.send_message("模型加载完成")
             except Exception as e:
-                raise RuntimeError(f"加载模型失败: {e}")
+                self.send_message(f"加载模型失败: {e}")
+
+    def _validate_model_path(self) -> Optional[str]:
+        """
+        验证模型路径的有效性, 按以下优先级：
+        1. 参数传入的路径
+        2. 配置文件中的路径
+        3. 默认的$HOME路径
+        如果都无效, 返回None
+        """
+        # 1. 检查用户指定的路径
+        if self.model_path and os.path.isfile(self.model_path):
+            self.send_message(f"使用用户指定的模型路径: {self.model_path}")
+            return self.model_path
+
+        # 2. 检查配置文件中的路径
+        config_model_path = self._get_path_from_config()
+        if config_model_path and os.path.isfile(config_model_path):
+            self.send_message(f"使用配置文件中的模型路径: {config_model_path}")
+            return config_model_path
+
+        # 3. 检查默认路径
+        default_model_path = os.path.join(os.environ.get("HOME", ""),
+                                          "Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin")
+        if os.path.isfile(default_model_path):
+            self.send_message(f"使用默认的模型路径: {default_model_path}")
+            return default_model_path
+
+        # 如果有whisper-cli, 我们可以不需要模型文件
+        if self.has_whisper_cli:
+            self.send_message("警告: 未找到模型文件, 但检测到whisper-cli, 将使用系统安装的模型")
+            return ""
+
+        # 所有路径都无效
+        self.send_message("Error: 所有可能的模型路径都无效")
+        return None
+
+    def _get_path_from_config(self) -> str:
+        """从配置文件中获取模型路径"""
+        try:
+            config_file = os.path.join(os.path.dirname(current_dir), "configs", "settings.json")
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                    if "Batch_Files" in config and "GenSubtitles" in config["Batch_Files"]:
+                        return config["Batch_Files"]["GenSubtitles"].get("model_path", "")
+        except Exception as e:
+            self.send_message(f"读取配置文件失败: {e}")
+        return ""
 
     def _data_dir_handler(self, _data_dir: str):
-        """处理单个数据文件夹，支持串行和并行处理"""
+        """处理单个数据文件夹, 支持串行和并行处理"""
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         file_list = self._get_filenames_by_suffix(_data_dir)
         if not file_list:
@@ -133,7 +188,7 @@ class GenSubtitles(FilesBasic):
             try:
                 os.remove(audio_path)
             except OSError as e:
-                self.send_message(f"警告: 无法删除临时音频文件 '{audio_path}': {e}")
+                self.send_message(f"Warning: 无法删除临时音频文件 '{audio_path}': {e}")
 
         if success:
             self.send_message(f"字幕生成完成: {Path(abs_input_path).stem}.srt")
@@ -141,7 +196,7 @@ class GenSubtitles(FilesBasic):
     def _extract_audio(self, video_path: Path, audio_path: Path) -> bool:
         """从视频中提取音频"""
         if not video_path.exists():
-            self.send_message(f"错误: 视频文件 '{video_path}' 不存在！")
+            self.send_message(f"Error: 视频文件 '{video_path}' 不存在！")
             return False
 
         cmd = ["ffmpeg", "-i", str(video_path),
@@ -156,13 +211,13 @@ class GenSubtitles(FilesBasic):
             os.chmod(audio_path, 0o777)
             return True
         except subprocess.CalledProcessError:
-            self.send_message(f"错误: '{video_path.name}' 的音频提取失败！")
+            self.send_message(f"Error: '{video_path.name}' 的音频提取失败！")
             return False
 
     def _generate_subtitle(self, audio_path: Path, original_video: Path) -> bool:
         """使用whisper-cli或faster-whisper库生成字幕"""
         if not audio_path.exists():
-            self.send_message(f"错误: 音频文件 '{audio_path}' 不存在！")
+            self.send_message(f"Error: 音频文件 '{audio_path}' 不存在！")
             return False
 
         basename = original_video.stem
@@ -174,22 +229,26 @@ class GenSubtitles(FilesBasic):
 
             cmd = [
                 "whisper-cli",
-                "--model", str(self.model_path),
                 "--file", str(audio_path),
                 "-osrt",
                 "-of", str(output_path),
                 "--language", "auto"
             ]
 
+            # 如果有指定模型路径且文件存在, 则添加模型参数
+            if self.model_path and os.path.isfile(self.model_path):
+                cmd.insert(1, "--model")
+                cmd.insert(2, str(self.model_path))
+
             try:
                 import subprocess
                 subprocess.run(cmd, check=True)
                 return True
             except subprocess.CalledProcessError:
-                self.send_message(f"错误: '{original_video.name}' 的字幕生成失败！")
+                self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！")
                 return False
 
-        # 如果没有whisper-cli，使用faster-whisper库
+        # 如果没有whisper-cli, 使用faster-whisper库
         elif has_faster_whisper:
             self.send_message("使用faster-whisper库生成字幕")
             output_srt_path = original_video.parent / f"{basename}.srt"
@@ -222,10 +281,10 @@ class GenSubtitles(FilesBasic):
                 return True
 
             except Exception as e:
-                self.send_message(f"错误: '{original_video.name}' 的字幕生成失败！原因: {e}")
+                self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！原因: {e}")
                 return False
         else:
-            self.send_message("错误: 没有可用的字幕生成工具")
+            self.send_message("Error: 没有可用的字幕生成工具")
             return False
 
     def _format_timestamp(self, seconds: float) -> str:
@@ -243,7 +302,7 @@ def main():
     # 获取用户输入的路径
     input_path = input("请复制实验文件夹所在目录的绝对路径(若Python代码在同一目录, 请直接按Enter): \n")
 
-    # 判断用户是否直接按Enter，设置为当前工作目录
+    # 判断用户是否直接按Enter, 设置为当前工作目录
     if not input_path:
         work_folder = os.getcwd()
     elif os.path.isdir(input_path):
@@ -253,7 +312,7 @@ def main():
     subtitles_generator.set_work_folder(work_folder)
     possble_dirs = subtitles_generator.possble_dirs
 
-    # 给用户显示，请用户输入index
+    # 给用户显示, 请用户输入index
     number = len(possble_dirs)
     subtitles_generator.send_message('\n')
     for i in range(number):
@@ -265,7 +324,7 @@ def main():
         indices = user_input.split()
         index_list = [int(index) for index in indices]
     except ValueError:
-        subtitles_generator.send_message("输入错误, 必须输入数字")
+        subtitles_generator.send_message("输入Error, 必须输入数字")
 
     RESULT = subtitles_generator.selected_dirs_handler(index_list)
     if not RESULT:

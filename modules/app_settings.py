@@ -33,31 +33,56 @@ class AppSettings(QObject):
             3. 如果是类相关的设置, 要与类名一致和对应的变量名一致，如"DicomToImage", "fps"
         """
         self.General_Settingmap = {
-            "language":         (["English", "French", "Spanish"], "General", "language"),
-            "autosave":         ("General", "autosave")
+            "language": (["English", "French", "Spanish"], "General", "language"),
+            "autosave": ("General", "autosave")
         }
         self.Network_Settingmap = {
-            "serial_baud_rate": ([800, 1200, 2400, 4800, 9600, 14400, 19200, 38400], "Network", "Serial", "baud_rate"),
+            "serial_baud_rate": ([800, 1200, 2400, 4800, 9600, 14400, 19200, 38400],
+                                 "Network", "Serial", "baud_rate"),
             "serial_data_bits": ([4, 8], "Network", "Serial", "data_bits"),
             "serial_stop_bits": ([1, 2, 4], "Network", "Serial", "stop_bits"),
-            "serial_parity":    (["None", "Even", "Odd"], "Network", "Serial", "parity"),
-            "use_proxy":        ("Network", "Internet", "use_proxy"),
-            "proxy_address":    ("Network", "Internet", "proxy_address"),
-            "proxy_port":       ("Network", "Internet", "proxy_port")
+            "serial_parity": (["None", "Even", "Odd"], "Network", "Serial", "parity"),
+            "use_proxy": ("Network", "Internet", "use_proxy"),
+            "proxy_address": ("Network", "Internet", "proxy_address"),
+            "proxy_port": ("Network", "Internet", "proxy_port")
         }
         self.Display_Settingmap = {
-            "resolution":       (["1920x1080", "1280x720", "800x600"], "Display", "Apparence", "resolution"),
-            "fullscreen":       ("Display", "Apparence", "fullscreen"),
-            "theme":            (["Light", "Dark"], "Display", "Apparence", "theme"),
-            "motion_on":        ("Display", "Motion", "motion_on")
+            "resolution": (["1920x1080", "1280x720", "800x600"],
+                           "Display", "Apparence", "resolution"),
+            "fullscreen": ("Display", "Apparence", "fullscreen"),
+            "theme": (["Light", "Dark"], "Display", "Apparence", "theme"),
+            "motion_on": ("Display", "Motion", "motion_on")
         }
         self.Batch_Files_Settingmap = {
             "dicom_log_folder_name": ("Batch_Files", "DicomToImage", "log_folder_name"),
-            "dicom_fps":        ([10, 20, 30], "Batch_Files", "DicomToImage", "fps"),
-            "dicom_frame_dpi":  ([100, 200, 400, 800], "Batch_Files", "DicomToImage", "frame_dpi"),
+            "dicom_fps": ([10, 20, 30], "Batch_Files", "DicomToImage", "fps"),
+            "dicom_frame_dpi": ([100, 200, 400, 800], "Batch_Files", "DicomToImage", "frame_dpi"),
             "dicom_out_dir_suffix": ("Batch_Files", "DicomToImage", "out_dir_suffix"),
             "mergecolor_log_folder_name": ("Batch_Files", "MergeColors", "log_folder_name"),
             "mergecolor_out_dir_suffix": ("Batch_Files", "MergeColors", "out_dir_suffix"),
+            "gen_subtitle_log_folder_name": ("Batch_Files", "GenSubtitles", "log_folder_name"),
+            "gen_subtitle_model_path": ("Batch_Files", "GenSubtitles", "model_path"),
+            "gen_subtitle_parallel": ([True, False], "Batch_Files", "GenSubtitles", "parallel"),
+            "ecg_log_folder_name": ("Batch_Files", "ECGHandler", "log_folder_name"),
+            "ecg_sampling_rate": ([100, 200, 500, 1000, 2000],
+                                  "Batch_Files", "ECGHandler", "sampling_rate"),
+            "ecg_parallel": ([True, False],
+                             "Batch_Files", "ECGHandler", "parallel"),
+            "ecg_out_dir_prefix": ("Batch_Files", "ECGHandler", "out_dir_prefix"),
+            "ecg_filter_low_cut": ([0.1, 0.5, 1.0, 2.0],
+                                   "Batch_Files", "ECGHandler", "filter_low_cut"),
+            "ecg_filter_high_cut": ([5.0, 15.0, 30.0, 50.0, 100.0],
+                                    "Batch_Files", "ECGHandler", "filter_high_cut"),
+            "ecg_filter_order": ([2, 4, 6, 8], "Batch_Files", "ECGHandler", "filter_order"),
+            "ecg_trim_raw_data": ([True, False], "Batch_Files", "ECGHandler", "trim_raw_data"),
+            "ecg_trim_filtered_data": ([True, False],
+                                       "Batch_Files", "ECGHandler", "trim_filtered_data"),
+            "ecg_trim_percentage": ([5.0, 10.0, 15.0, 20.0],
+                                    "Batch_Files", "ECGHandler", "trim_percentage"),
+            "ecg_time_range_short": ([1.0, 2.0, 3.0, 4.0],
+                                     "Batch_Files", "ECGHandler", "time_range_short"),
+            "ecg_time_range_medium": ([10.0, 15.0, 20.0, 30.0],
+                                      "Batch_Files", "ECGHandler", "time_range_medium"),
         }
         # 加载设置到成员变量
         self._load_settings()
@@ -104,6 +129,9 @@ class AppSettings(QObject):
         d = self.__settings_json
         for key in path:
             d = d.get(key, {})
+        # 确保布尔值正确解析
+        if isinstance(d, str) and d.lower() in ('true', 'false'):
+            return d.lower() == 'true'
         return d
 
     # 保存设置到文件
