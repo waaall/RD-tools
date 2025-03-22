@@ -42,6 +42,14 @@
             "model_path": "/home/active-team/Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin",
             "parallel": false
         },
+        "SumSubtitles": {
+            "log_folder_name": "sum_subtitles_log",
+            "api_provider": "ollama",
+            "model_name": "gemma3:12b",
+            "temperature": 0.5,
+            "max_tokens": 4096,
+            "parallel": false
+        },
         "ECGHandler": {
             "log_folder_name": "ecg_handler_log",
             "sampling_rate": 1000,
