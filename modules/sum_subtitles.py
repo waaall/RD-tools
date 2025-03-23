@@ -40,8 +40,7 @@ class SumSubtitles(FilesBasic):
                  api_key: str = None,
                  temperature: float = 0.5,
                  max_tokens: int = 4096,
-                 parallel: bool = False,
-                 video_extensions: List[str] = None):
+                 parallel: bool = False):
         """
         初始化字幕总结器
         Args:
@@ -49,13 +48,12 @@ class SumSubtitles(FilesBasic):
             api_provider: API提供商，可选值: "openai", "ollama", "deepseek", "ali", "siliconflow"
             model_name: 使用的模型名称
             api_key: API密钥（对于需要密钥的API提供商）
-            base_url: API基础URL（可自定义，例如反向代理）
             temperature: 温度参数，控制输出随机性
             max_tokens: 最大生成token数
             parallel: 是否使用并行处理
-            video_extensions: 支持的视频文件扩展名列表
         """
         super().__init__(log_folder_name=log_folder_name)
+
         self.api_provider = api_provider
         self.model_name = model_name
         self.api_key = api_key
@@ -63,9 +61,9 @@ class SumSubtitles(FilesBasic):
         self.max_tokens = max_tokens
         self.parallel = parallel
         self.suffixs = ['.srt']  # 只处理srt字幕文件
-        self.video_extensions = video_extensions or ['.mp4', '.mkv', '.avi', '.mov']
+        self.video_extensions = ['.mp4', '.mkv', '.avi', '.mov']
 
-        # 初始化AI聊天实例
+        # AI聊天实例将在需要时创建
         self.ai_chat = None
 
         # 检查必需工具
@@ -76,20 +74,6 @@ class SumSubtitles(FilesBasic):
         # 检查ffmpeg
         if not shutil.which("ffmpeg"):
             raise RuntimeError("Error: 未找到ffmpeg命令. 请先安装ffmpeg. ")
-
-        # 初始化AI聊天实例
-        try:
-            self.ai_chat = create_chat_instance(
-                provider=self.api_provider,
-                model_name=self.model_name,
-                api_key=self.api_key,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
-            )
-            self.send_message(f"已初始化 {self.api_provider} API, 模型: {self.model_name}")
-        except Exception as e:
-            self.send_message(f"Error: 初始化AI聊天实例失败: {e}")
-            raise
             
         # 检查依赖库
         try:
@@ -97,6 +81,47 @@ class SumSubtitles(FilesBasic):
             import bs4
         except ImportError as e:
             self.send_message(f"Error: 缺少依赖库: {e}. 请安装: pip install markdown beautifulsoup4")
+            
+    def _create_ai_chat(self):
+        """按需创建或更新AI聊天实例"""
+        # 检查实例是否已存在，以及是否需要更新
+        if self.ai_chat is None or self.ai_chat.__class__.__name__ != f"{self.api_provider.capitalize()}Chat":
+            # 如果存在旧实例，先清理资源
+            if self.ai_chat:
+                try:
+                    self.ai_chat.clear_history()
+                    self.ai_chat = None
+                except Exception as e:
+                    self.send_message(f"Warning: 释放旧AI聊天实例时出错: {e}")
+            
+            # 创建新的AI聊天实例
+            try:
+                self.ai_chat = create_chat_instance(
+                    provider=self.api_provider,
+                    model_name=self.model_name,
+                    api_key=self.api_key,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens
+                )
+                self.send_message(f"已初始化 {self.api_provider} API, 模型: {self.model_name}")
+            except Exception as e:
+                self.send_message(f"Error: 初始化AI聊天实例失败: {e}")
+                raise
+        else:
+            # 检查参数是否需要更新
+            if (self.ai_chat.model_name != self.model_name or 
+                self.ai_chat.api_key != self.api_key or 
+                self.ai_chat.temperature != self.temperature or 
+                self.ai_chat.max_tokens != self.max_tokens):
+                
+                # 更新实例参数
+                self.ai_chat.model_name = self.model_name
+                self.ai_chat.api_key = self.api_key
+                self.ai_chat.temperature = self.temperature
+                self.ai_chat.max_tokens = self.max_tokens
+                self.send_message(f"已更新AI聊天实例参数, 模型: {self.model_name}")
+        
+        return self.ai_chat
 
     def _data_dir_handler(self, _data_dir: str):
         """处理单个数据文件夹, 支持串行和并行处理"""
@@ -135,6 +160,7 @@ class SumSubtitles(FilesBasic):
 
     def _generate_summary(self, subtitle_content: str) -> Optional[str]:
         """调用AI API生成总结"""
+        self._create_ai_chat()
         # 每次生成新的总结时清空历史对话
         self.ai_chat.clear_history()
         

@@ -23,7 +23,13 @@ class SettingWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.settings = AppSettings()
+        # 确保设置完全加载
+        self.settings.load_settings()
         self.main_categories = self.settings.get_main_categories()
+        
+        # 如果main_categories仍为None或空，提供默认值以防止错误
+        if not self.main_categories:
+            self.send_message("警告: 未能加载设置类别")
 
         self.setWindowTitle('Settings')
         self.setGeometry(100, 100, 500, 500)
@@ -163,7 +169,9 @@ class SettingWindow(QWidget):
         elif control_type == "text":
             # 使用 QLineEdit 文本编辑
             text_setting = QLineEdit()
-            text_setting.setText(value)
+            # 确保传入的值是字符串类型
+            text_value = str(value) if value is not None else ""
+            text_setting.setText(text_value)
 
             # 设置QLineEdit 的内容边距，只调整上下边距，水平边距不固定
             text_setting.setContentsMargins(-1, 2, -1, 2)

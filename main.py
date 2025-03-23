@@ -48,78 +48,98 @@ def main():
     # 初始化主窗口
     window = MainWindow()
 
+    # 确保SettingWindow完全加载
+    window.SettingWindow.settings.load_settings()
+
     # ==========================绑定mergecolors==========================
-    # 初始化绑定,初始化可以直接设置需要的颜色通道: colors=["R", "G", "B"]
-    merge_colors_bind = BatchFilesBinding(MergeColors(colors=["R", "G"]), '颜色通道合成')
-
-    # FileWindow信号数据selected_signal传入绑定对象merge_colors_bind
+    # 获取MergeColors的初始化参数
+    merge_colors_params = window.SettingWindow.settings.get_class_params("MergeColors")
+    # 添加额外的必要参数
+    if "colors" not in merge_colors_params:
+        merge_colors_params["colors"] = ["R", "G"]
+    # 初始化对象
+    merge_colors_obj = MergeColors(**merge_colors_params)
+    merge_colors_bind = BatchFilesBinding(merge_colors_obj, '颜色通道合成')
+    # 绑定信号和槽
     window.FileWindow.selected_signal.connect(merge_colors_bind.update_user_select)
-
-    # dicom对象信息信号绑定FileWindow显示
     merge_colors_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
-
-    # FileWindow创建对应的操作按钮绑定modules的操作
     window.FileWindow.add_file_operation(merge_colors_bind.bind_name,
-                                         merge_colors_bind.handler_binding)
-
-    # 设置的参数被修改的信号数据绑定update_setting函数
+                                        merge_colors_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(merge_colors_bind.update_setting)
 
     # =============================绑定dicom=============================
-    dicom_bind = BatchFilesBinding(DicomToImage(), 'DICOM处理')
+    dicom_params = window.SettingWindow.settings.get_class_params("DicomToImage")
+    dicom_obj = DicomToImage(**dicom_params)
+    dicom_bind = BatchFilesBinding(dicom_obj, 'DICOM处理')
     window.FileWindow.selected_signal.connect(dicom_bind.update_user_select)
     dicom_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(dicom_bind.bind_name, dicom_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(dicom_bind.update_setting)
 
     # =============================绑定SplitColors=============================
-    # 初始化绑定,初始化可以直接设置需要的颜色通道: colors=["R", "G", "B"]
-    split_color_bind = BatchFilesBinding(SplitColors(colors=["R", "G"]), '分离颜色通道')
+    split_colors_params = window.SettingWindow.settings.get_class_params("SplitColors")
+    # 添加额外的必要参数
+    if "colors" not in split_colors_params:
+        split_colors_params["colors"] = ["R", "G"]
+    split_color_obj = SplitColors(**split_colors_params)
+    split_color_bind = BatchFilesBinding(split_color_obj, '分离颜色通道')
     window.FileWindow.selected_signal.connect(split_color_bind.update_user_select)
     split_color_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(split_color_bind.bind_name,
-                                         split_color_bind.handler_binding)
+                                        split_color_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(split_color_bind.update_setting)
 
     # =============================绑定TwistImgs=============================
-    twisted_corner = [[0, 0], [430, 82], [432, 268], [0, 276]]
-    twist_shape_bind = BatchFilesBinding(TwistImgs(twisted_corner=twisted_corner), '图片视角变换')
+    twist_params = window.SettingWindow.settings.get_class_params("TwistImgs")
+    # 添加默认的twisted_corner参数
+    if "twisted_corner" not in twist_params:
+        twist_params["twisted_corner"] = [[0, 0], [430, 82], [432, 268], [0, 276]]
+    twist_shape_obj = TwistImgs(**twist_params)
+    twist_shape_bind = BatchFilesBinding(twist_shape_obj, '图片视角变换')
     window.FileWindow.selected_signal.connect(twist_shape_bind.update_user_select)
     twist_shape_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(twist_shape_bind.bind_name,
-                                         twist_shape_bind.handler_binding)
+                                        twist_shape_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(twist_shape_bind.update_setting)
 
     # =============================绑定BiliVideo=============================
-    split_color_bind = BatchFilesBinding(BiliVideos(), 'B站视频导出')
-    window.FileWindow.selected_signal.connect(split_color_bind.update_user_select)
-    split_color_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
-    window.FileWindow.add_file_operation(split_color_bind.bind_name,
-                                         split_color_bind.handler_binding)
-    window.SettingWindow.settings.changed_signal.connect(split_color_bind.update_setting)
+    bili_params = window.SettingWindow.settings.get_class_params("BiliVideos")
+    bili_videos_obj = BiliVideos(**bili_params)
+    bili_videos_bind = BatchFilesBinding(bili_videos_obj, 'B站视频导出')
+    window.FileWindow.selected_signal.connect(bili_videos_bind.update_user_select)
+    bili_videos_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
+    window.FileWindow.add_file_operation(bili_videos_bind.bind_name,
+                                        bili_videos_bind.handler_binding)
+    window.SettingWindow.settings.changed_signal.connect(bili_videos_bind.update_setting)
 
     # =============================绑定ECGHandler=============================
-    ecg_bind = BatchFilesBinding(ECGHandler(), 'ECG信号处理')
+    ecg_params = window.SettingWindow.settings.get_class_params("ECGHandler")
+    ecg_obj = ECGHandler(**ecg_params)
+    ecg_bind = BatchFilesBinding(ecg_obj, 'ECG信号处理')
     window.FileWindow.selected_signal.connect(ecg_bind.update_user_select)
     ecg_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(ecg_bind.bind_name,
-                                         ecg_bind.handler_binding)
+                                        ecg_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(ecg_bind.update_setting)
 
     # =============================绑定GenSubtitles=============================
-    gen_subtitles_bind = BatchFilesBinding(GenSubtitles(), '视频字幕生成')
+    gen_subtitles_params = window.SettingWindow.settings.get_class_params("GenSubtitles")
+    gen_subtitles_obj = GenSubtitles(**gen_subtitles_params)
+    gen_subtitles_bind = BatchFilesBinding(gen_subtitles_obj, '视频字幕生成')
     window.FileWindow.selected_signal.connect(gen_subtitles_bind.update_user_select)
     gen_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(gen_subtitles_bind.bind_name,
-                                         gen_subtitles_bind.handler_binding)
+                                        gen_subtitles_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(gen_subtitles_bind.update_setting)
 
     # =============================绑定SumSubtitles=============================
-    sum_subtitles_bind = BatchFilesBinding(SumSubtitles(), '视频字幕总结')
+    sum_subtitles_params = window.SettingWindow.settings.get_class_params("SumSubtitles")
+    sum_subtitles_obj = SumSubtitles(**sum_subtitles_params)
+    sum_subtitles_bind = BatchFilesBinding(sum_subtitles_obj, '视频字幕总结')
     window.FileWindow.selected_signal.connect(sum_subtitles_bind.update_user_select)
     sum_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(sum_subtitles_bind.bind_name,
-                                         sum_subtitles_bind.handler_binding)
+                                        sum_subtitles_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(sum_subtitles_bind.update_setting)
 
     # =============================app运行=============================

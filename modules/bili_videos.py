@@ -85,18 +85,50 @@ class BiliVideos(FilesBasic):
             if 'groupTitle' not in info_data:
                 self.send_message(f"Warning: info 文件「{info}」中缺少 'groupTitle' 字段")
             else:
-                title += info_data['groupTitle']
+                # 1. 限制groupTitle长度不超过10个字
+                group_title = info_data['groupTitle']
+                if len(group_title) > 10:
+                    group_title = group_title[:10]
+                    self.send_message(f"提示: groupTitle 过长，已截断为 '{group_title}'")
+                
+                # 2. 删除不能作为文件名的特殊字符
+                # 移除 Windows 文件系统不支持的字符: \ / : * ? " < > |
+                invalid_chars = ['\\', '/', ':', '*', '?', '？', '。', '，',
+                                 '"', '<', '>', '|', '“', '”', '：', '`', '·']
+                for char in invalid_chars:
+                    group_title = group_title.replace(char, '')
+                
+                title += group_title
+                
                 # 检查 info 文件中是否有 'p' 字段
                 if 'p' not in info_data:
                     self.send_message(f"Warning: info 文件「{info}」中缺少 'p' 字段")
                 else:
                     p_str = '-' + str(info_data['p']) + '-'
                     title += p_str
+            
             # 检查 info 文件中是否有 'title' 字段
             if 'title' not in info_data:
                 self.send_message(f"Warning: info 文件「{info}」中缺少 'title' 字段")
             else:
-                title += info_data['title']
+                # 获取title
+                item_title = info_data['title']
+                
+                # 2. 删除不能作为文件名的特殊字符
+                for char in invalid_chars:
+                    item_title = item_title.replace(char, '')
+             
+                # # 3. 删除title中与groupTitle重复三个以上的字符
+                # if 'groupTitle' in info_data and len(info_data['groupTitle']) >= 3:
+                #     group_title = info_data['groupTitle']
+                #     # 查找group_title中长度超过3的子串在item_title中的位置
+                #     for i in range(len(group_title) - 2):
+                #         substr = group_title[i:i+3]  # 取三个字符的子串
+                #         if substr in item_title:
+                #             item_title = item_title.replace(substr, '')
+                #             self.send_message(f"提示: 移除了title中与groupTitle重复的子串 '{substr}'")
+
+                title += item_title
             return title
 
         except Exception as e:

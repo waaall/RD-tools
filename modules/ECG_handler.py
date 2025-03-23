@@ -21,7 +21,7 @@ matplotlib.use('Agg')  # 设置后端为Agg，避免多线程问题
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.fft import fft, fftfreq
-from scipy.signal import butter, filtfilt  # 添加滤波器相关函数
+from scipy.signal import butter, filtfilt
 
 # 获取当前文件所在目录,并加入系统环境变量(临时)
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,14 +62,32 @@ class ECGHandler(FilesBasic):
             time_range_medium: 中时域图范围(秒)
         """
         super().__init__(log_folder_name=log_folder_name, out_dir_prefix=out_dir_prefix)
-        self.sampling_rate = sampling_rate
         self.parallel = parallel
         self.suffixs = ['.csv']  # 设置要处理的文件后缀
 
-        # 滤波器参数
-        self.filter_low_cut = filter_low_cut
-        self.filter_high_cut = filter_high_cut
-        self.filter_order = filter_order
+        try:
+            self.__sampling_rate = int(sampling_rate)
+        except ValueError:
+            print(f"Warning: sampling_rate参数类型错误，使用默认值1000")
+            self.__sampling_rate = 1000
+
+        try:
+            self.__filter_low_cut = float(filter_low_cut)
+        except (ValueError, TypeError):
+            print(f"Error: filter_low_cut无法转换为浮点数: {filter_low_cut}, 使用默认值0.5")
+            self.__filter_low_cut = 0.5
+            
+        try:
+            self.__filter_high_cut = float(filter_high_cut)
+        except (ValueError, TypeError):
+            print(f"Error: filter_high_cut无法转换为浮点数: {filter_high_cut}, 使用默认值30.0")
+            self.__filter_high_cut = 30.0
+
+        try:
+            self.__filter_order = int(filter_order)
+        except ValueError:
+            print(f"Warning: filter_order参数类型错误，使用默认值4")
+            self.__filter_order = 4
 
         # 数据截取参数 - 分别控制原始数据和滤波后数据
         self.trim_raw_data = trim_raw_data
@@ -79,6 +97,42 @@ class ECGHandler(FilesBasic):
         # 时域图时间范围
         self.time_range_short = time_range_short
         self.time_range_medium = time_range_medium
+
+    @property
+    def filter_order(self):
+        """获取滤波器阶数，确保返回整数类型"""
+        try:
+            return int(self.__filter_order)
+        except (TypeError, ValueError):
+            self.send_message("Warning: 滤波器阶数类型错误，返回默认值4")
+            return 4
+
+    @property
+    def sampling_rate(self):
+        """获取采样率，确保返回整数类型"""
+        try:
+            return int(self.__sampling_rate)
+        except (TypeError, ValueError):
+            self.send_message("Warning: 采样率类型错误，返回默认值1000")
+            return 1000
+            
+    @property
+    def filter_low_cut(self):
+        """获取低频截止，确保返回浮点数类型"""
+        try:
+            return float(self.__filter_low_cut)
+        except (TypeError, ValueError):
+            self.send_message("Warning: 低频截止类型错误，返回默认值0.5")
+            return 0.5
+            
+    @property
+    def filter_high_cut(self):
+        """获取高频截止，确保返回浮点数类型"""
+        try:
+            return float(self.__filter_high_cut)
+        except (TypeError, ValueError):
+            self.send_message("Warning: 高频截止类型错误，返回默认值30.0")
+            return 30.0
 
     def _data_dir_handler(self, _data_dir: str):
         """处理单个数据文件夹, 支持串行和并行处理"""
@@ -142,10 +196,7 @@ class ECGHandler(FilesBasic):
             self._plot_frequency_domain(data, abs_outfolder_path)
 
             # 应用带通滤波器处理ECG信号
-            filtered_data = self._apply_bandpass_filter(data,
-                                                        lowcut=self.filter_low_cut,
-                                                        highcut=self.filter_high_cut,
-                                                        order=self.filter_order)
+            filtered_data = self._apply_bandpass_filter(data)
 
             # 滤波后的数据时间轴
             filtered_time_axis = time_axis.copy()
@@ -185,38 +236,66 @@ class ECGHandler(FilesBasic):
             import traceback
             self.send_message(traceback.format_exc())
 
-    def _apply_bandpass_filter(self,
-                               data: np.ndarray,
-                               lowcut: float = None,
-                               highcut: float = None,
-                               order: int = None) -> np.ndarray:
+    def _apply_bandpass_filter(self, data: np.ndarray) -> np.ndarray:
         """
         应用带通滤波器处理ECG信号
         Args:
             data: 输入的ECG数据
-            lowcut: 低截止频率 (Hz)，默认使用类属性
-            highcut: 高截止频率 (Hz)，默认使用类属性
-            order: 滤波器阶数，默认使用类属性
         Returns:
             滤波后的ECG数据
         """
         # 使用传入参数或默认类属性
-        lowcut = lowcut if lowcut is not None else self.filter_low_cut
-        highcut = highcut if highcut is not None else self.filter_high_cut
-        order = order if order is not None else self.filter_order
+        lowcut = self.filter_low_cut
+        highcut = self.filter_high_cut
+        order = self.filter_order
+        
+        # 确保参数类型正确
+        try:
+            lowcut = float(lowcut)
+        except (TypeError, ValueError):
+            self.send_message(f"Warning: lowcut无法转换为浮点数，使用默认值 {self.filter_low_cut}")
+            lowcut = float(self.filter_low_cut)
+            
+        try:
+            highcut = float(highcut)
+        except (TypeError, ValueError):
+            self.send_message(f"Warning: highcut无法转换为浮点数，使用默认值 {self.filter_high_cut}")
+            highcut = float(self.filter_high_cut)
+            
+        try:
+            order = int(order)
+        except (TypeError, ValueError):
+            self.send_message(f"Warning: order无法转换为整数，使用默认值 {self.filter_order}")
+            order = int(self.filter_order)
 
-        nyquist = 0.5 * self.sampling_rate
-        low = lowcut / nyquist
-        high = highcut / nyquist
+        # 确保nyquist计算正确
+        try:
+            nyquist = 0.5 * float(self.sampling_rate)
+            low = lowcut / nyquist
+            high = highcut / nyquist
+        except (TypeError, ValueError, ZeroDivisionError) as e:
+            self.send_message(f"滤波器参数计算错误: {e}，使用备用参数")
+            # 使用安全备用值
+            nyquist = 500.0  # 假设1000Hz采样率
+            low = 0.001      # 非常低的截止值
+            high = 0.06      # 30Hz/500Hz = 0.06
 
         # 设计巴特沃斯带通滤波器
-        b, a = butter(order, [low, high], btype='band')
+        try:
+            b, a = butter(order, [low, high], btype='band')
+        except Exception as e:
+            self.send_message(f"滤波器设计失败: {e}，使用备用滤波器")
+            # 使用安全的备用滤波器值
+            b, a = butter(2, [0.001, 0.06], btype='band')
 
         # 应用零相位滤波（不引入相位延迟）
-        filtered_data = filtfilt(b, a, data)
-
-        self.send_message(f"Applied bandpass filter: {lowcut}-{highcut}Hz, order: {order}")
-        return filtered_data
+        try:
+            filtered_data = filtfilt(b, a, data)
+            self.send_message(f"Applied bandpass filter: {lowcut}-{highcut}Hz, order: {order}")
+            return filtered_data
+        except Exception as e:
+            self.send_message(f"滤波失败: {e}，返回原始数据")
+            return data
 
     def _plot_comparison(self,
                          original_data: np.ndarray,
@@ -352,6 +431,73 @@ class ECGHandler(FilesBasic):
                 plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close(fig)  # 明确关闭图形对象
 
+    def _process_data(self, 
+                       raw_data: np.ndarray, 
+                       return_all: bool = False):
+        """
+        处理ECG数据，应用滤波
+        Args:
+            raw_data: 原始ECG数据
+            return_all: 不再使用，保留参数是为了兼容性
+        Returns:
+            processed_data: 处理后的ECG数据
+        """
+        try:
+            # 确保raw_data是numpy数组
+            if not isinstance(raw_data, np.ndarray):
+                try:
+                    raw_data = np.array(raw_data, dtype=float)
+                except Exception as e:
+                    self.send_message(f"数据转换错误: {e}")
+                    return None
+                    
+            # 检查数据是否为空
+            if raw_data is None or len(raw_data) == 0:
+                self.send_message("错误: 输入数据为空")
+                return None
+                
+            # 过滤掉NaN值
+            if np.isnan(raw_data).any():
+                self.send_message("Warning: 输入数据包含NaN值，已过滤")
+                raw_data = raw_data[~np.isnan(raw_data)]
+                
+                if len(raw_data) == 0:
+                    self.send_message("错误: 过滤NaN后数据为空")
+                    return None
+                    
+            # 确保裁剪百分比是float类型
+            try:
+                trim_percentage = float(self.trim_percentage)
+                if not 0 <= trim_percentage < 50:
+                    self.send_message(f"Warning: 裁剪百分比{trim_percentage}超出范围，使用默认值5%")
+                    trim_percentage = 5.0
+            except (TypeError, ValueError):
+                self.send_message(f"Warning: 裁剪百分比格式错误，使用默认值5%")
+                trim_percentage = 5.0
+
+            # 应用带通滤波
+            filtered_data = self._apply_bandpass_filter(raw_data)
+            
+            # 修剪数据（去除开始和结束的一部分数据，这些数据可能不准确）
+            if self.trim_raw_data:
+                trim_samples = int(len(filtered_data) * (trim_percentage / 100))
+                trimmed_data = filtered_data[trim_samples:-trim_samples] if trim_samples > 0 else filtered_data
+            else:
+                trimmed_data = filtered_data
+                
+            if len(trimmed_data) == 0:
+                self.send_message("错误: 裁剪后数据为空")
+                return None
+                
+            # 只返回处理后的数据，不再返回R波峰、心率等信息
+            return trimmed_data
+                    
+        except Exception as e:
+            self.send_message(f"数据处理错误: {e}")
+            import traceback
+            self.send_message(traceback.format_exc())
+            return None
+
 
 # =====================main(单独执行时使用)=====================
 def main():
@@ -364,7 +510,10 @@ def main():
     elif os.path.isdir(input_path):
         work_folder = input_path
 
-    ecg_handler = ECGHandler()
+    ecg_handler = ECGHandler(filter_low_cut = 0.5,
+                             filter_high_cut = 35.0,
+                             filter_order = 4)
+
     ecg_handler.set_work_folder(work_folder)
     possble_dirs = ecg_handler.possble_dirs
 

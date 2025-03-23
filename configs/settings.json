@@ -31,11 +31,11 @@
             "log_folder_name": "dicom_handle_log",
             "fps": 10,
             "frame_dpi": 200,
-            "out_dir_suffix": "Img-"
+            "out_dir_prefix": "Img-"
         },
         "MergeColors": {
             "log_folder_name": "merge_color_log",
-            "out_dir_suffix": "merge-"
+            "out_dir_prefix": "merge-"
         },
         "GenSubtitles": {
             "log_folder_name": "gen_subtitles_log",
@@ -46,6 +46,7 @@
             "log_folder_name": "sum_subtitles_log",
             "api_provider": "ollama",
             "model_name": "gemma3:12b",
+            "api_key": "",
             "temperature": 0.5,
             "max_tokens": 4096,
             "parallel": false
@@ -55,9 +56,9 @@
             "sampling_rate": 1000,
             "parallel": false,
             "out_dir_prefix": "ecg-",
-            "filter_low_cut": 0.1,
-            "filter_high_cut": 30.0,
-            "filter_order": 4,
+            "filter_low_cut": 0.5,
+            "filter_high_cut": 35.0,
+            "filter_order":4,
             "trim_raw_data": true,
             "trim_filtered_data": true,
             "trim_percentage": 10.0,
