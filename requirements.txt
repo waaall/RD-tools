@@ -8,4 +8,7 @@ pyserial
 pydicom
 opencv-python
 pyqtgraph
+PyMuPDF
+openai
+ollama
 faster_whisper
