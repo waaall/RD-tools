@@ -52,6 +52,11 @@ class FilesBasic(QObject):
         self.log_folder_name = log_folder_name
         self.out_dir_prefix = out_dir_prefix
 
+        # 用户目录下的配置文件路径
+        self.user_home_path = os.environ.get("HOME", "")
+        if not self.user_home_path and os.name == 'nt':  # Windows系统
+            self.user_home_path = os.environ.get("USERPROFILE", "")
+
     # ======================设置workfolder======================
     def set_work_folder(self, work_folder: str):
         """设置工作目录, 并确保目录存在"""
