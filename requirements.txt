@@ -9,6 +9,8 @@ pydicom
 opencv-python
 pyqtgraph
 PyMuPDF
+markdown
+beautifulsoup4
 openai
 ollama
 faster_whisper

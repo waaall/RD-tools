@@ -87,7 +87,7 @@ class GenSubtitles(FilesBasic):
         # 如果没有whisper-cli, 则加载faster-whisper模型
         if not self.has_whisper_cli and has_faster_whisper:
             self.send_message("未检测到whisper-cli, 使用faster-whisper库")
-            
+
             # 检测是否有CUDA可用
             try:
                 import torch
@@ -101,13 +101,13 @@ class GenSubtitles(FilesBasic):
             except ImportError:
                 self.send_message("未安装torch或无法导入，默认使用CPU")
                 device = "cpu"
-                
+
             self.send_message(f"正在加载Whisper模型 '{self.model_path}'...")
             try:
                 self.model = WhisperModel(
-                    self.model_path, 
-                    device=device, 
-                    compute_type=self.compute_type, 
+                    self.model_path,
+                    device=device,
+                    compute_type=self.compute_type,
                     local_files_only=True
                 )
                 self.send_message("模型加载完成")
@@ -299,11 +299,11 @@ class GenSubtitles(FilesBasic):
                         srt_file.write(f"{i}\n")
                         srt_file.write(f"{start_time} --> {end_time}\n")
                         srt_file.write(f"{segment.text.strip()}\n\n")
-                
+
                 if segment_count == 0:
                     self.send_message("警告: 未生成任何字幕片段，请检查音频文件")
                     return False
-                    
+
                 self.send_message(f"字幕已保存到 '{output_srt_path}'")
                 return True
 

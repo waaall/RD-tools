@@ -70,24 +70,24 @@ class AppSettings(QObject):
                                           "Batch_Files", "SumSubtitles", "api_provider"),
             "sum_subtitle_model_name": ("Batch_Files", "SumSubtitles", "model_name"),
             "sum_subtitle_api_key": ("Batch_Files", "SumSubtitles", "api_key"),
-            "sum_subtitle_temperature": ([0.1, 0.2, 0.3, 0.5, 0.7, 0.9], 
-                                        "Batch_Files", "SumSubtitles", "temperature"),
-            "sum_subtitle_max_tokens": ([2048, 4096, 8192], 
-                                       "Batch_Files", "SumSubtitles", "max_tokens"),
-            "sum_subtitle_parallel": ([True, False], 
-                                     "Batch_Files", "SumSubtitles", "parallel"),
+            "sum_subtitle_temperature": ([0.1, 0.2, 0.3, 0.5, 0.7, 0.9],
+                                         "Batch_Files", "SumSubtitles", "temperature"),
+            "sum_subtitle_max_tokens": ([2048, 4096, 8192],
+                                        "Batch_Files", "SumSubtitles", "max_tokens"),
+            "sum_subtitle_parallel": ([True, False],
+                                      "Batch_Files", "SumSubtitles", "parallel"),
             "ecg_log_folder_name": ("Batch_Files", "ECGHandler", "log_folder_name"),
             "ecg_sampling_rate": ([100, 200, 500, 1000, 2000],
                                   "Batch_Files", "ECGHandler", "sampling_rate"),
             "ecg_parallel": ([True, False],
                              "Batch_Files", "ECGHandler", "parallel"),
             "ecg_out_dir_prefix": ("Batch_Files", "ECGHandler", "out_dir_prefix"),
-            "ecg_filter_low_cut": ([0.1, 0.5, 1.0, 2.0], # 传入就出错?
+            "ecg_filter_low_cut": ([0.1, 0.5, 1.0, 2.0],
                                    "Batch_Files", "ECGHandler", "filter_low_cut"),
             "ecg_filter_high_cut": ([5.0, 15.0, 30.0, 50.0, 100.0],
                                     "Batch_Files", "ECGHandler", "filter_high_cut"),
             "ecg_filter_order": ([2, 4, 6, 8, 10],
-                                  "Batch_Files", "ECGHandler", "filter_order"),
+                                 "Batch_Files", "ECGHandler", "filter_order"),
             "ecg_trim_raw_data": ([True, False], "Batch_Files", "ECGHandler", "trim_raw_data"),
             "ecg_trim_filtered_data": ([True, False],
                                        "Batch_Files", "ECGHandler", "trim_filtered_data"),
@@ -111,15 +111,15 @@ class AppSettings(QObject):
         # 获取项目根目录
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         default_settings_file = os.path.join(base_dir, 'configs', 'settings.json')
-        
+
         # 用户目录下的配置文件路径
         user_home = os.environ.get("HOME", "")
         if not user_home and os.name == 'nt':  # Windows系统
             user_home = os.environ.get("USERPROFILE", "")
-        
-        user_config_dir = os.path.join(user_home, "Develop", "RD-tools")
+
+        user_config_dir = os.path.join(user_home, "Develop", "RD-tools-configs")
         user_settings_file = os.path.join(user_config_dir, "settings.json")
-        
+
         # 检查用户配置目录是否存在，不存在则创建
         if not os.path.exists(user_config_dir):
             try:
@@ -129,7 +129,7 @@ class AppSettings(QObject):
                 print(f"From AppSettings:\n\t创建用户配置目录失败: {e}\n")
                 # 如果创建失败，使用默认配置文件
                 self.settings_file = default_settings_file
-        
+
         # 如果用户配置文件不存在，但目录存在，则拷贝默认配置文件
         if not os.path.exists(user_settings_file) and os.path.exists(user_config_dir):
             try:
@@ -148,7 +148,7 @@ class AppSettings(QObject):
             # 其他情况，使用默认配置文件
             self.settings_file = default_settings_file
             print(f"From AppSettings:\n\t使用默认配置文件: {default_settings_file}\n")
-        
+
         # 打开文件加载json数据
         try:
             with open(self.settings_file, 'r') as file:
@@ -157,7 +157,7 @@ class AppSettings(QObject):
             print(f"From AppSettings:\n\t加载配置文件失败: {e}\n")
             # 如果加载失败，尝试加载默认配置文件
             if self.settings_file != default_settings_file:
-                print(f"From AppSettings:\n\t尝试加载默认配置文件\n")
+                print("From AppSettings:\n\t尝试加载默认配置文件\n")
                 self.settings_file = default_settings_file
                 with open(self.settings_file, 'r') as file:
                     self.__settings_json = json.load(file)
@@ -197,15 +197,15 @@ class AppSettings(QObject):
         d = self.__settings_json
         for key in path:
             d = d.get(key, {})
-            
+
         # 确保返回正确的数据类型
         if d is None:
             return None
-            
+
         # 处理布尔值
         if isinstance(d, str) and d.lower() in ('true', 'false'):
             return d.lower() == 'true'
-            
+
         # 处理数字
         if isinstance(d, str):
             # 尝试转换为整数
@@ -214,15 +214,15 @@ class AppSettings(QObject):
                     return int(d)
             except (ValueError, AttributeError):
                 pass
-                
+
             # 尝试转换为浮点数
             try:
                 return float(d)
             except (ValueError, AttributeError):
                 pass
-                
+
         return d
-        
+
     # 根据类名获取参数
     def get_class_params(self, class_name):
         """
@@ -235,10 +235,10 @@ class AppSettings(QObject):
         # 确保设置已加载
         if self.__settings_json is None:
             self._load_settings()
-            
+
         # 存储找到的参数
         params = {}
-        
+
         # 遍历所有设置映射
         for category in self.__main_categories:
             setting_map = self.get_setting_map(category)
@@ -249,10 +249,10 @@ class AppSettings(QObject):
                 if len(path) >= 2 and path[1] == class_name:
                     # 获取参数名和值
                     param_name = path[-1]
-                    param_value = self.get_value_from_path(path)  # 直接从路径获取值以确保类型正确
-                    params[param_name] = param_value  
+                    param_value = self.get_value_from_path(path)
+                    params[param_name] = param_value
         return params
-        
+
     # 手动加载设置
     def load_settings(self):
         """手动加载设置文件，用于在初始化时不立即加载的情况"""

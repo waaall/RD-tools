@@ -68,7 +68,7 @@ class ECGHandler(FilesBasic):
         try:
             self.__sampling_rate = int(sampling_rate)
         except ValueError:
-            print(f"Warning: sampling_rate参数类型错误，使用默认值1000")
+            print("Warning: sampling_rate参数类型错误，使用默认值1000")
             self.__sampling_rate = 1000
 
         try:
@@ -76,7 +76,7 @@ class ECGHandler(FilesBasic):
         except (ValueError, TypeError):
             print(f"Error: filter_low_cut无法转换为浮点数: {filter_low_cut}, 使用默认值0.5")
             self.__filter_low_cut = 0.5
-            
+
         try:
             self.__filter_high_cut = float(filter_high_cut)
         except (ValueError, TypeError):
@@ -86,7 +86,7 @@ class ECGHandler(FilesBasic):
         try:
             self.__filter_order = int(filter_order)
         except ValueError:
-            print(f"Warning: filter_order参数类型错误，使用默认值4")
+            print("Warning: filter_order参数类型错误，使用默认值4")
             self.__filter_order = 4
 
         # 数据截取参数 - 分别控制原始数据和滤波后数据
@@ -115,7 +115,7 @@ class ECGHandler(FilesBasic):
         except (TypeError, ValueError):
             self.send_message("Warning: 采样率类型错误，返回默认值1000")
             return 1000
-            
+
     @property
     def filter_low_cut(self):
         """获取低频截止，确保返回浮点数类型"""
@@ -124,7 +124,7 @@ class ECGHandler(FilesBasic):
         except (TypeError, ValueError):
             self.send_message("Warning: 低频截止类型错误，返回默认值0.5")
             return 0.5
-            
+
     @property
     def filter_high_cut(self):
         """获取高频截止，确保返回浮点数类型"""
@@ -248,20 +248,20 @@ class ECGHandler(FilesBasic):
         lowcut = self.filter_low_cut
         highcut = self.filter_high_cut
         order = self.filter_order
-        
+
         # 确保参数类型正确
         try:
             lowcut = float(lowcut)
         except (TypeError, ValueError):
             self.send_message(f"Warning: lowcut无法转换为浮点数，使用默认值 {self.filter_low_cut}")
             lowcut = float(self.filter_low_cut)
-            
+
         try:
             highcut = float(highcut)
         except (TypeError, ValueError):
             self.send_message(f"Warning: highcut无法转换为浮点数，使用默认值 {self.filter_high_cut}")
             highcut = float(self.filter_high_cut)
-            
+
         try:
             order = int(order)
         except (TypeError, ValueError):
@@ -334,8 +334,8 @@ class ECGHandler(FilesBasic):
             # 滤波后信号
             ax[1].plot(filtered_time[start_idx_filt:end_idx_filt],
                        filtered_data[start_idx_filt:end_idx_filt], 'r-')
-            ax[1].set_title(f'Filtered ECG Signal ({self.filter_low_cut}-{self.filter_high_cut}Hz)'+
-                            (f' (Trimmed)' if self.trim_filtered_data else ''))
+            ax[1].set_title(f"Filtered ECG Signal ({self.filter_low_cut}-{self.filter_high_cut}Hz)" +
+                            (" (Trimmed)" if self.trim_filtered_data else ''))
             ax[1].set_xlabel('Time (s)')
             ax[1].set_ylabel('ADC Value')
             ax[1].grid(True)
@@ -431,9 +431,7 @@ class ECGHandler(FilesBasic):
                 plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close(fig)  # 明确关闭图形对象
 
-    def _process_data(self, 
-                       raw_data: np.ndarray, 
-                       return_all: bool = False):
+    def _process_data(self, raw_data: np.ndarray, return_all: bool = False):
         """
         处理ECG数据，应用滤波
         Args:
@@ -450,21 +448,21 @@ class ECGHandler(FilesBasic):
                 except Exception as e:
                     self.send_message(f"数据转换错误: {e}")
                     return None
-                    
+
             # 检查数据是否为空
             if raw_data is None or len(raw_data) == 0:
                 self.send_message("错误: 输入数据为空")
                 return None
-                
+
             # 过滤掉NaN值
             if np.isnan(raw_data).any():
                 self.send_message("Warning: 输入数据包含NaN值，已过滤")
                 raw_data = raw_data[~np.isnan(raw_data)]
-                
+
                 if len(raw_data) == 0:
                     self.send_message("错误: 过滤NaN后数据为空")
                     return None
-                    
+
             # 确保裁剪百分比是float类型
             try:
                 trim_percentage = float(self.trim_percentage)
@@ -472,26 +470,26 @@ class ECGHandler(FilesBasic):
                     self.send_message(f"Warning: 裁剪百分比{trim_percentage}超出范围，使用默认值5%")
                     trim_percentage = 5.0
             except (TypeError, ValueError):
-                self.send_message(f"Warning: 裁剪百分比格式错误，使用默认值5%")
+                self.send_message("Warning: 裁剪百分比格式错误，使用默认值5%")
                 trim_percentage = 5.0
 
             # 应用带通滤波
             filtered_data = self._apply_bandpass_filter(raw_data)
-            
+
             # 修剪数据（去除开始和结束的一部分数据，这些数据可能不准确）
             if self.trim_raw_data:
                 trim_samples = int(len(filtered_data) * (trim_percentage / 100))
                 trimmed_data = filtered_data[trim_samples:-trim_samples] if trim_samples > 0 else filtered_data
             else:
                 trimmed_data = filtered_data
-                
+
             if len(trimmed_data) == 0:
                 self.send_message("错误: 裁剪后数据为空")
                 return None
-                
+
             # 只返回处理后的数据，不再返回R波峰、心率等信息
             return trimmed_data
-                    
+
         except Exception as e:
             self.send_message(f"数据处理错误: {e}")
             import traceback
@@ -510,9 +508,7 @@ def main():
     elif os.path.isdir(input_path):
         work_folder = input_path
 
-    ecg_handler = ECGHandler(filter_low_cut = 0.5,
-                             filter_high_cut = 35.0,
-                             filter_order = 4)
+    ecg_handler = ECGHandler(filter_low_cut=0.5, filter_high_cut=35.0, filter_order=4)
 
     ecg_handler.set_work_folder(work_folder)
     possble_dirs = ecg_handler.possble_dirs

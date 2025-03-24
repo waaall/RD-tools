@@ -74,14 +74,14 @@ class SumSubtitles(FilesBasic):
         # 检查ffmpeg
         if not shutil.which("ffmpeg"):
             raise RuntimeError("Error: 未找到ffmpeg命令. 请先安装ffmpeg. ")
-            
+
         # 检查依赖库
         try:
             import markdown
             import bs4
         except ImportError as e:
             self.send_message(f"Error: 缺少依赖库: {e}. 请安装: pip install markdown beautifulsoup4")
-            
+
     def _create_ai_chat(self):
         """按需创建或更新AI聊天实例"""
         # 检查实例是否已存在，以及是否需要更新
@@ -93,7 +93,7 @@ class SumSubtitles(FilesBasic):
                     self.ai_chat = None
                 except Exception as e:
                     self.send_message(f"Warning: 释放旧AI聊天实例时出错: {e}")
-            
+
             # 创建新的AI聊天实例
             try:
                 self.ai_chat = create_chat_instance(
@@ -109,18 +109,18 @@ class SumSubtitles(FilesBasic):
                 raise
         else:
             # 检查参数是否需要更新
-            if (self.ai_chat.model_name != self.model_name or 
-                self.ai_chat.api_key != self.api_key or 
-                self.ai_chat.temperature != self.temperature or 
+            if (self.ai_chat.model_name != self.model_name or
+                self.ai_chat.api_key != self.api_key or
+                self.ai_chat.temperature != self.temperature or
                 self.ai_chat.max_tokens != self.max_tokens):
-                
+
                 # 更新实例参数
                 self.ai_chat.model_name = self.model_name
                 self.ai_chat.api_key = self.api_key
                 self.ai_chat.temperature = self.temperature
                 self.ai_chat.max_tokens = self.max_tokens
                 self.send_message(f"已更新AI聊天实例参数, 模型: {self.model_name}")
-        
+
         return self.ai_chat
 
     def _data_dir_handler(self, _data_dir: str):
@@ -163,7 +163,7 @@ class SumSubtitles(FilesBasic):
         self._create_ai_chat()
         # 每次生成新的总结时清空历史对话
         self.ai_chat.clear_history()
-        
+
         prompt = f"""请详细分析以下字幕内容，并生成一份完整的视频总结。请严格按照以下两部分格式要求输出：
 
 ## 第一部分：视频摘要
@@ -202,12 +202,12 @@ class SumSubtitles(FilesBasic):
         try:
             # 使用AI聊天实例生成回复
             response = self.ai_chat.generate(prompt=prompt, stream=False)
-            
+
             # 检查响应是否成功
             if "error" in response:
                 self.send_message(f"Error: AI模型调用失败: {response['error']}")
                 return None
-                
+
             return response["response"]
         except Exception as e:
             self.send_message(f"Error: 调用AI API失败: {e}")
@@ -217,7 +217,7 @@ class SumSubtitles(FilesBasic):
         """将总结文本分离为Markdown摘要和JSON部分"""
         # 提取JSON部分
         json_match = re.search(r'```(?:json)?\s*(\[\s*\{\s*"time".*?\}\s*\])', summary, re.DOTALL)
-        
+
         if json_match:
             json_content = json_match.group(1)
             # 尝试解析JSON以验证其有效性
@@ -238,21 +238,21 @@ class SumSubtitles(FilesBasic):
         try:
             # 提取Markdown摘要和JSON部分
             md_summary, json_content = self._extract_summary_and_json(summary)
-            
+
             md_path = Path(subtitle_path).with_suffix('.md')
             json_path = Path(subtitle_path).with_suffix('.json')
-            
+
             # 保存Markdown文件（纯摘要部分）
             with open(md_path, 'w', encoding='utf-8') as f:
                 f.write(md_summary)
             self.send_message(f"已保存Markdown文件: {md_path}")
-            
+
             # 如果找到有效的JSON部分，单独保存
             if json_content:
                 with open(json_path, 'w', encoding='utf-8') as f:
                     f.write(json_content)
                 self.send_message(f"已保存JSON文件: {json_path}")
-            
+
             return str(md_path)
         except Exception as e:
             self.send_message(f"Error: 保存Markdown文件失败: {e}")
@@ -262,49 +262,48 @@ class SumSubtitles(FilesBasic):
         """从总结中提取时间戳和内容"""
         # 首先尝试从提取的JSON部分读取
         _, json_content = self._extract_summary_and_json(summary)
-        
+
         if json_content:
             try:
                 timestamps_data = json.loads(json_content)
-                
+
                 # 验证JSON格式
                 if not isinstance(timestamps_data, list):
                     self.send_message("Warning: JSON数据不是列表格式")
                     raise ValueError("JSON数据不是列表格式")
-                
+
                 valid_timestamps = []
                 for item in timestamps_data:
                     if not isinstance(item, dict):
                         continue
-                        
+
                     if "time" not in item or "content" not in item:
                         continue
-                        
+
                     # 验证时间戳格式
                     time_pattern = r'^\d{2}:\d{2}:\d{2}$'
                     if not re.match(time_pattern, item["time"]):
                         self.send_message(f"Warning: 时间戳格式不正确: {item['time']}")
                         continue
-                        
                     valid_timestamps.append(item)
-                
+
                 if valid_timestamps:
                     self.send_message(f"成功解析到{len(valid_timestamps)}个时间戳")
                     return valid_timestamps
                 else:
                     self.send_message("Warning: 未找到有效的时间戳数据")
                     raise ValueError("未找到有效的时间戳数据")
-                    
+
             except (json.JSONDecodeError, ValueError) as e:
                 self.send_message(f"Warning: 解析JSON时间戳数据失败: {e}")
         else:
             self.send_message("Warning: 未找到JSON格式的时间戳数据")
-            
+
         # 使用正则表达式提取时间戳作为备选方案
         self.send_message("尝试使用正则表达式提取时间戳...")
         pattern = r'\d{2}:\d{2}:\d{2}'
         timestamps = re.findall(pattern, summary)
-        
+
         if timestamps:
             self.send_message(f"通过正则表达式提取到{len(timestamps)}个时间戳")
             # 转换为字典格式
@@ -317,18 +316,18 @@ class SumSubtitles(FilesBasic):
         """查找与字幕文件匹配的视频文件"""
         base_name = Path(subtitle_path).stem
         parent_dir = Path(subtitle_path).parent
-        
+
         # 尝试所有支持的视频扩展名
         for ext in self.video_extensions:
             video_path = parent_dir / f"{base_name}{ext}"
             if video_path.exists():
                 return video_path
-        
+
         # 如果没有找到直接匹配的文件名，尝试在同一目录下搜索相似名称的视频文件
         for file in parent_dir.glob('*'):
             if file.suffix in self.video_extensions and base_name in file.stem:
                 return file
-                
+
         return None
 
     def _capture_frames(self, subtitle_path: str, timestamps_data: List[Dict[str, str]]) -> Optional[Path]:
@@ -336,7 +335,7 @@ class SumSubtitles(FilesBasic):
         if not timestamps_data:
             self.send_message("Warning: 没有时间戳数据，跳过截图")
             return None
-            
+
         video_path = self._find_video_file(subtitle_path)
         if not video_path:
             self.send_message(f"Error: 未找到对应的视频文件，已尝试扩展名: {', '.join(self.video_extensions)}")
@@ -366,7 +365,7 @@ class SumSubtitles(FilesBasic):
                 successful_frames += 1
             except subprocess.CalledProcessError as e:
                 self.send_message(f"Error: 截图失败 {timestamp}: {e}")
-                
+
         if successful_frames > 0:
             self.send_message(f"成功截取了 {successful_frames}/{len(timestamps_data)} 个视频帧")
             return output_dir
@@ -379,41 +378,41 @@ class SumSubtitles(FilesBasic):
         try:
             import markdown
             from bs4 import BeautifulSoup
-            
+
             pdf_path = Path(md_path).with_suffix('.pdf')
             frames_dir = Path(md_path).parent / "frames"
-            
+
             # 创建PDF文档
             doc = fitz.open()
 
             # 读取Markdown文件
             with open(md_path, 'r', encoding='utf-8') as f:
                 md_content = f.read()
-            
+
             # 将Markdown转换为HTML
             html = markdown.markdown(md_content)
             soup = BeautifulSoup(html, 'html.parser')
             text = soup.get_text()
-            
+
             # 创建第一页 - 标题
             page = doc.new_page()
             page.insert_text((50, 50), "视频摘要", fontsize=18, fontname="helv-b")
-            
+
             # 分段插入文本，处理长文本自动分页
             y_pos = 80
             paragraphs = text.split('\n\n')
             current_page = page
-            
+
             for paragraph in paragraphs:
                 if not paragraph.strip():
                     continue
-                    
+
                 # 处理长段落，按照每行约80个字符分割
                 words = paragraph.split()
                 lines = []
                 current_line = []
                 line_length = 0
-                
+
                 for word in words:
                     if line_length + len(word) + 1 <= 80:  # +1 for space
                         current_line.append(word)
@@ -422,29 +421,29 @@ class SumSubtitles(FilesBasic):
                         lines.append(' '.join(current_line))
                         current_line = [word]
                         line_length = len(word)
-                
+
                 if current_line:
                     lines.append(' '.join(current_line))
-                
+
                 # 检查是否需要创建新页面
                 if y_pos + 15 * len(lines) > 800:
                     current_page = doc.new_page()
                     y_pos = 50
-                
+
                 # 插入段落标题（如果存在）
                 if paragraph.startswith('#'):
                     title = paragraph.split('\n')[0]
                     current_page.insert_text((50, y_pos), title, fontsize=14, fontname="helv-b")
                     y_pos += 25
-                
+
                 # 插入段落文本
                 for line in lines:
                     if line.strip():
                         current_page.insert_text((50, y_pos), line, fontsize=11)
                         y_pos += 15
-                
+
                 y_pos += 10  # 段落间距
-                
+
                 # 检查是否需要新页面
                 if y_pos > 800:
                     current_page = doc.new_page()
@@ -454,55 +453,56 @@ class SumSubtitles(FilesBasic):
             for item in timestamps_data:
                 timestamp = item["time"]
                 content = item.get("content", "未提供内容描述")
-                
+
                 # 使用与_capture_frames方法相同的文件名转换逻辑
                 safe_filename = timestamp.replace(':', '_')
                 img_path = frames_dir / f"{safe_filename}.jpg"
-                
+
                 if img_path.exists():
                     # 创建新页面
                     page = doc.new_page()
-                    
+
                     # 添加时间戳作为标题
                     page.insert_text((50, 40), f"时间点: {timestamp}", fontsize=14, fontname="helv-b")
-                    
+
                     # 计算内容文本需要的行数
-                    content_lines = [content[i:i+80] for i in range(0, len(content), 80)]
-                    
+                    content_lines = [content[i:i + 80] for i in range(0, len(content), 80)]
+
                     # 添加内容描述
                     y_text = 70
                     for line in content_lines:
                         if line.strip():
                             page.insert_text((50, y_text), line, fontsize=11)
                             y_text += 15
-                    
+
                     # 确保有足够空间放置图片
                     y_image = y_text + 15
-                    
+
                     # 插入图片并调整大小
                     try:
                         img = Image.open(img_path)
-                        
+
                         # 计算适当的图像尺寸以适应页面
                         max_width = 500
                         max_height = 700 - y_image
-                        
+
                         width, height = img.size
                         aspect = width / height
-                        
+
                         if width > max_width:
                             width = max_width
                             height = width / aspect
-                        
+
                         if height > max_height:
                             height = max_height
                             width = height * aspect
-                        
+
                         # 创建图像矩形
                         img_rect = fitz.Rect(50, y_image, 50 + width, y_image + height)
-                        
+
                         # 插入图像
-                        page.insert_image(img_rect, stream=img.tobytes("raw", "RGB"), width=img.width, height=img.height)
+                        page.insert_image(img_rect, stream=img.tobytes("raw", "RGB"),
+                                          width=img.width, height=img.height)
                     except Exception as e:
                         self.send_message(f"Warning: 无法插入图片 {img_path}: {e}")
                         # 添加错误说明
@@ -552,7 +552,7 @@ class SumSubtitles(FilesBasic):
             timestamps_data = self._extract_timestamps(summary)
             if not timestamps_data:
                 self.send_message("Warning: 未找到有效的时间戳数据，将生成不包含截图的PDF")
-            
+
             # 执行视频截图
             if timestamps_data:
                 self.send_message("正在截取视频关键帧...")
@@ -563,7 +563,7 @@ class SumSubtitles(FilesBasic):
             # 生成PDF
             self.send_message("正在生成PDF文档...")
             self._generate_pdf(md_path, timestamps_data)
-            
+
             self.send_message(f"完成处理: {os.path.basename(abs_input_path)}")
         except Exception as e:
             self.send_message(f"Error: 处理文件时出错: {e}")
@@ -594,10 +594,10 @@ def main():
         "4": "ali (阿里通义千问, 需API密钥)",
         "5": "siliconflow (硅流智能, 需API密钥)"
     }
-    
+
     for key, value in providers.items():
         print(f"{key}: {value}")
-    
+
     provider_choice = input("\n请输入选项编号(默认1): ")
     provider_map = {
         "1": "ollama",
@@ -607,12 +607,12 @@ def main():
         "5": "siliconflow"
     }
     api_provider = provider_map.get(provider_choice, "ollama")
-    
+
     # 如果不是本地Ollama，询问API密钥
     api_key = None
     if api_provider != "ollama":
         api_key = input(f"请输入{api_provider} API密钥: ")
-    
+
     # 选择模型 (根据提供商提供默认值)
     default_models = {
         "ollama": "gemma3:12b",
@@ -621,11 +621,11 @@ def main():
         "ali": "qwen-max",
         "siliconflow": "sf-llama3-8b"
     }
-    
+
     model_name = input(f"\n请输入模型名称 (默认: {default_models[api_provider]}): ")
     if not model_name:
         model_name = default_models[api_provider]
-    
+
     # 创建SumSubtitles实例
     subtitles_summarizer = SumSubtitles(
         api_provider=api_provider,
