@@ -68,26 +68,15 @@ class ECGHandler(FilesBasic):
         try:
             self.__sampling_rate = int(sampling_rate)
         except ValueError:
-            print("Warning: sampling_rate参数类型错误，使用默认值1000")
+            print("Error: sampling_rate参数类型错误，使用默认值1000")
             self.__sampling_rate = 1000
 
-        try:
-            self.__filter_low_cut = float(filter_low_cut)
-        except (ValueError, TypeError):
-            print(f"Error: filter_low_cut无法转换为浮点数: {filter_low_cut}, 使用默认值0.5")
-            self.__filter_low_cut = 0.5
+        # 计算与采样率相关的频率参数
+        self.__nyquist_freq = self.__sampling_rate / 2.0
+        self.__max_freq = min(self.__nyquist_freq * 0.95, 500)  # 最高不超过500Hz,留5%余量
 
-        try:
-            self.__filter_high_cut = float(filter_high_cut)
-        except (ValueError, TypeError):
-            print(f"Error: filter_high_cut无法转换为浮点数: {filter_high_cut}, 使用默认值30.0")
-            self.__filter_high_cut = 30.0
-
-        try:
-            self.__filter_order = int(filter_order)
-        except ValueError:
-            print("Warning: filter_order参数类型错误，使用默认值4")
-            self.__filter_order = 4
+        # 验证并设置滤波参数
+        self.__validate_filter_params(filter_low_cut, filter_high_cut, filter_order)
 
         # 数据截取参数 - 分别控制原始数据和滤波后数据
         self.trim_raw_data = trim_raw_data
@@ -97,6 +86,87 @@ class ECGHandler(FilesBasic):
         # 时域图时间范围
         self.time_range_short = time_range_short
         self.time_range_medium = time_range_medium
+
+    def __validate_filter_params(self, filter_low_cut, filter_high_cut, filter_order):
+        """
+        验证并设置滤波器参数，确保参数在有效范围内
+        Args:
+            filter_low_cut: 低频截止
+            filter_high_cut: 高频截止
+            filter_order: 滤波器阶数
+        """
+        # 验证低频截止
+        try:
+            low_cut = float(filter_low_cut)
+            # 确保低频截止值不小于0.1
+            if low_cut < 0.1:
+                print(f"Warning: filter_low_cut值过小: {low_cut}, 已调整为0.1")
+                self.__filter_low_cut = 0.1
+            else:
+                self.__filter_low_cut = low_cut
+        except (ValueError, TypeError):
+            print(f"Error: filter_low_cut无法转换为浮点数: {filter_low_cut}, 使用默认值0.5")
+            self.__filter_low_cut = 0.5
+
+        # 验证高频截止
+        try:
+            high_cut = float(filter_high_cut)
+            # 确保高频截止不超过奈奎斯特频率
+            if high_cut > self.__nyquist_freq:
+                print(f"Warning: filter_high_cut值过大: {high_cut}, 已调整为{self.__nyquist_freq * 0.9}")
+                self.__filter_high_cut = self.__nyquist_freq * 0.9
+            else:
+                self.__filter_high_cut = high_cut
+        except (ValueError, TypeError):
+            print(f"Error: filter_high_cut无法转换为浮点数: {filter_high_cut}, 使用默认值30.0")
+            self.__filter_high_cut = 30.0
+
+        # 验证滤波器阶数
+        try:
+            self.__filter_order = int(filter_order)
+        except ValueError:
+            print("Warning: filter_order参数类型错误，使用默认值4")
+            self.__filter_order = 4
+
+    def calculate_min_frequency(self, data_length: int) -> float:
+        """
+        根据数据长度计算最低频率
+        Args:
+            data_length: 数据长度（个数）
+        Returns:
+            最低频率
+        """
+        if data_length <= 0:
+            self.send_message("错误: 数据长度必须大于0")
+            return 0.1  # 返回安全的默认值
+
+        # 计算数据时长（秒）
+        data_duration = data_length / self.sampling_rate
+
+        # 最低频率 = 1 / (时长的一半)
+        min_freq = 1.0 / (data_duration / 2.0)
+
+        self.send_message(f"数据长度: {data_length}点, 时长: {data_duration:.2f}秒, 最低频率: {min_freq:.3f}Hz")
+        return min_freq
+
+    @property
+    def nyquist_freq(self):
+        """获取奈奎斯特频率，确保返回浮点数类型"""
+        try:
+            return float(self.__nyquist_freq)
+        except (TypeError, ValueError):
+            self.send_message("Warning: 奈奎斯特频率类型错误，重新计算")
+            return float(self.sampling_rate) / 2.0
+
+    @property
+    def max_freq(self):
+        """获取最大频率，确保返回浮点数类型"""
+        try:
+            return float(self.__max_freq)
+        except (TypeError, ValueError):
+            self.send_message("Warning: 最大频率类型错误，重新计算")
+            nyquist = float(self.sampling_rate) / 2.0
+            return min(nyquist * 0.95, 500.0)
 
     @property
     def filter_order(self):
@@ -189,14 +259,20 @@ class ECGHandler(FilesBasic):
                 time_axis = time_axis[trim_samples:-trim_samples]
                 self.send_message(f"Trimmed raw data by {self.trim_percentage}%")
 
+            # 计算最低频率
+            min_freq = self.calculate_min_frequency(len(data))
+
             # 生成时域图
             self._plot_time_domain(data, abs_outfolder_path)
 
             # 生成频域图
-            self._plot_frequency_domain(data, abs_outfolder_path)
+            self._plot_frequency_domain(data, abs_outfolder_path, min_freq=min_freq)
 
             # 应用带通滤波器处理ECG信号
-            filtered_data = self._apply_bandpass_filter(data)
+            filtered_data = self._apply_bandpass_filter(data, min_freq)
+            if filtered_data is None:
+                self.send_message("Error: 滤波失败, 不进行画图操作")
+                return
 
             # 滤波后的数据时间轴
             filtered_time_axis = time_axis.copy()
@@ -236,57 +312,46 @@ class ECGHandler(FilesBasic):
             import traceback
             self.send_message(traceback.format_exc())
 
-    def _apply_bandpass_filter(self, data: np.ndarray) -> np.ndarray:
+    def _apply_bandpass_filter(self, data: np.ndarray, min_freq: float = None) -> np.ndarray:
         """
         应用带通滤波器处理ECG信号
         Args:
             data: 输入的ECG数据
+            min_freq: 最低频率，如果为None则使用默认值
         Returns:
             滤波后的ECG数据
         """
-        # 使用传入参数或默认类属性
-        lowcut = self.filter_low_cut
+        # 确保有最低频率
+        if min_freq is None:
+            min_freq = self.calculate_min_frequency(len(data))
+
+        # 限制最低频率，确保不小于0.1Hz
+        min_freq = max(min_freq * 2, 0.1)
+
+        # 确定低频截止值（使用计算得到的最低频率和设置的低频截止中的较大值）
+        lowcut = max(min_freq, self.filter_low_cut)
+
+        # 如果使用了数据计算的最低频率而不是实例设置的低频截止值，发送消息说明
+        if min_freq > self.filter_low_cut:
+            self.send_message(f"Warning：由于数据时长过短{min_freq:.3f}Hz替代设置的低频截止{self.filter_low_cut}Hz")
+
         highcut = self.filter_high_cut
         order = self.filter_order
 
-        # 确保参数类型正确
-        try:
-            lowcut = float(lowcut)
-        except (TypeError, ValueError):
-            self.send_message(f"Warning: lowcut无法转换为浮点数，使用默认值 {self.filter_low_cut}")
-            lowcut = float(self.filter_low_cut)
-
-        try:
-            highcut = float(highcut)
-        except (TypeError, ValueError):
-            self.send_message(f"Warning: highcut无法转换为浮点数，使用默认值 {self.filter_high_cut}")
-            highcut = float(self.filter_high_cut)
-
-        try:
-            order = int(order)
-        except (TypeError, ValueError):
-            self.send_message(f"Warning: order无法转换为整数，使用默认值 {self.filter_order}")
-            order = int(self.filter_order)
-
-        # 确保nyquist计算正确
-        try:
-            nyquist = 0.5 * float(self.sampling_rate)
-            low = lowcut / nyquist
-            high = highcut / nyquist
-        except (TypeError, ValueError, ZeroDivisionError) as e:
-            self.send_message(f"滤波器参数计算错误: {e}，使用备用参数")
-            # 使用安全备用值
-            nyquist = 500.0  # 假设1000Hz采样率
-            low = 0.001      # 非常低的截止值
-            high = 0.06      # 30Hz/500Hz = 0.06
+        # 检查低频截止是否大于高频截止
+        if lowcut >= highcut:
+            self.send_message(f"Error: 低频截止({lowcut}Hz)>=高频截止({highcut}Hz)，无法带通滤波")
+            return None
 
         # 设计巴特沃斯带通滤波器
         try:
+            nyquist = self.nyquist_freq
+            low = lowcut / nyquist
+            high = highcut / nyquist
             b, a = butter(order, [low, high], btype='band')
         except Exception as e:
-            self.send_message(f"滤波器设计失败: {e}，使用备用滤波器")
-            # 使用安全的备用滤波器值
-            b, a = butter(2, [0.001, 0.06], btype='band')
+            self.send_message(f"Error: 滤波器设计失败: {e}")
+            return None
 
         # 应用零相位滤波（不引入相位延迟）
         try:
@@ -294,8 +359,8 @@ class ECGHandler(FilesBasic):
             self.send_message(f"Applied bandpass filter: {lowcut}-{highcut}Hz, order: {order}")
             return filtered_data
         except Exception as e:
-            self.send_message(f"滤波失败: {e}，返回原始数据")
-            return data
+            self.send_message(f"Error: 滤波失败: {e}，返回原始数据")
+            return None
 
     def _plot_comparison(self,
                          original_data: np.ndarray,
@@ -334,7 +399,7 @@ class ECGHandler(FilesBasic):
             # 滤波后信号
             ax[1].plot(filtered_time[start_idx_filt:end_idx_filt],
                        filtered_data[start_idx_filt:end_idx_filt], 'r-')
-            ax[1].set_title(f"Filtered ECG Signal ({self.filter_low_cut}-{self.filter_high_cut}Hz)" +
+            ax[1].set_title(f"Filtered ECG Signal ({self.filter_low_cut:.3f}-{self.filter_high_cut:.3f}Hz)" +
                             (" (Trimmed)" if self.trim_filtered_data else ''))
             ax[1].set_xlabel('Time (s)')
             ax[1].set_ylabel('ADC Value')
@@ -380,11 +445,26 @@ class ECGHandler(FilesBasic):
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close(fig)  # 明确关闭图形对象
 
-    def _plot_frequency_domain(self, data: np.ndarray, output_dir: str, is_trimmed: bool = None):
-        """绘制频域信号图"""
+    def _plot_frequency_domain(self,
+                               data: np.ndarray,
+                               output_dir: str,
+                               is_trimmed: bool = None,
+                               min_freq: float = None):
+        """
+        绘制频域信号图
+        Args:
+            data: 输入的ECG数据
+            output_dir: 输出目录
+            is_trimmed: 是否为裁剪后的数据
+            min_freq: 最低频率，如果为None则计算
+        """
         # 根据目录判断是原始数据还是滤波后数据
         if is_trimmed is None:
             is_trimmed = self.trim_raw_data if "filtered" not in output_dir else self.trim_filtered_data
+
+        # 如果未提供最低频率，则计算
+        if min_freq is None:
+            min_freq = self.calculate_min_frequency(len(data))
 
         # 计算FFT
         n = len(data)
@@ -395,23 +475,28 @@ class ECGHandler(FilesBasic):
         positive_freq = xf[:n // 2]
         amplitude = 2.0 / n * np.abs(yf[:n // 2])
 
-        # 获取奈奎斯特频率 (采样率的一半)
-        nyquist_freq = self.sampling_rate / 2.0
-        # 添加采样率最大分析频率
-        max_freq = min(nyquist_freq * 0.95, 500)  # 最高不超过500Hz,留5%余量
+        # 使用类属性获取奈奎斯特频率和最大频率
+        nyquist_freq = self.nyquist_freq
+        max_freq = self.max_freq
+        # 检查最低频率是否大于最大频率，如果是则无法绘制频谱图
+        if min_freq >= max_freq:
+            self.send_message(f"Warning: 最低频率({min_freq:.3f}Hz)>最大频率({max_freq:.1f}Hz)，无法绘制频谱图")
+            return
 
-        # 根据采样率动态确定频率范围, 仅当采样率足够高时添加更高的频率范围
-        freq_ranges = [
-            (0.01, 1, "0.01-1Hz"),
-            (0.5, 5, "0.5-5Hz"),
-            (0.5, 30, "0.5-30Hz"),
-        ]
+        # 根据采样率和计算的最低频率动态确定频率范围
+        freq_ranges = []
+        if min_freq < 1:
+            freq_ranges.append((min_freq, 1, f"{min_freq:.3f}-1Hz"))
+        if min_freq < 5:
+            freq_ranges.append((min_freq, 5, f"{min_freq:.3f}-5Hz"))
+        if min_freq < 30:
+            freq_ranges.append((min_freq, 30, f"{min_freq:.3f}-30Hz"))
         if nyquist_freq < 100 and nyquist_freq >= 60:
-            freq_ranges.append((0.5, max_freq, f"0.5-{max_freq}Hz"))
+            freq_ranges.append((min_freq, max_freq, f"{min_freq:.3f}-{max_freq}Hz"))
         if nyquist_freq >= 100:
-            freq_ranges.append((0.5, 100, "0.5-100Hz"))
+            freq_ranges.append((min_freq, 100, f"{min_freq:.3f}-100Hz"))
         if nyquist_freq >= 200:
-            freq_ranges.append((0.5, max_freq, f"0.5-{max_freq:.1f}Hz"))
+            freq_ranges.append((min_freq, max_freq, f"{min_freq:.3f}-{max_freq:.1f}Hz"))
 
         for start_freq, end_freq, suffix in freq_ranges:
             # 创建新的图形对象
@@ -475,7 +560,9 @@ class ECGHandler(FilesBasic):
 
             # 应用带通滤波
             filtered_data = self._apply_bandpass_filter(raw_data)
-
+            if filtered_data is None:
+                self.send_message("Error: 滤波失败, 不进行后续处理")
+                return None
             # 修剪数据（去除开始和结束的一部分数据，这些数据可能不准确）
             if self.trim_raw_data:
                 trim_samples = int(len(filtered_data) * (trim_percentage / 100))
@@ -484,7 +571,7 @@ class ECGHandler(FilesBasic):
                 trimmed_data = filtered_data
 
             if len(trimmed_data) == 0:
-                self.send_message("错误: 裁剪后数据为空")
+                self.send_message("Error: 裁剪后数据为空")
                 return None
 
             # 只返回处理后的数据，不再返回R波峰、心率等信息
@@ -508,7 +595,7 @@ def main():
     elif os.path.isdir(input_path):
         work_folder = input_path
 
-    ecg_handler = ECGHandler(filter_low_cut=0.5, filter_high_cut=35.0, filter_order=4)
+    ecg_handler = ECGHandler(filter_low_cut=0.2, filter_high_cut=30.0, filter_order=4)
 
     ecg_handler.set_work_folder(work_folder)
     possble_dirs = ecg_handler.possble_dirs
