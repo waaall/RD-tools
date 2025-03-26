@@ -41,7 +41,7 @@ class ECGHandler(FilesBasic):
                  out_dir_prefix: str = 'ecg-',
                  filter_low_cut: float = 0.5,       # 滤波器低频截止
                  filter_high_cut: float = 30.0,     # 滤波器高频截止
-                 filter_order: int = 4,             # 滤波器阶数
+                 filter_order: int = 2,             # 滤波器阶数
                  trim_raw_data: bool = False,       # 是否截取原始数据
                  trim_filtered_data: bool = True,   # 是否截取滤波后数据
                  trim_percentage: float = 10.0,     # 前后截取的百分比0-20
@@ -103,10 +103,13 @@ class ECGHandler(FilesBasic):
         # 验证低频截止
         try:
             low_cut = float(filter_low_cut)
-            # 确保低频截止值不小于0.1
+            # 确保低频截止值在0.1-1.0之间
             if low_cut < 0.1:
                 print(f"Warning: filter_low_cut值过小: {low_cut}, 已调整为0.1")
                 self.__filter_low_cut = 0.1
+            elif low_cut > 1.0:
+                self.__filter_low_cut = 1.0
+                self.send_message(f"Warning: filter_low_cut值过大: {low_cut}, 已调整为1.0")
             else:
                 self.__filter_low_cut = low_cut
         except (ValueError, TypeError):
@@ -128,10 +131,18 @@ class ECGHandler(FilesBasic):
 
         # 验证滤波器阶数
         try:
-            self.__filter_order = int(filter_order)
+            order = int(filter_order)
+            valid_orders = [1, 2, 4]
+            if order not in valid_orders:
+                # 计算与有效选项的差值，选择差值最小的选项
+                closest_order = min(valid_orders, key=lambda x: abs(x - order))
+                self.__filter_order = closest_order
+                self.send_message(f"Warning: filter_order:{order}不在[1,2,4]中，已修正为{closest_order}")
+            else:
+                self.__filter_order = order
         except ValueError:
-            print("Warning: filter_order参数类型错误，使用默认值4")
-            self.__filter_order = 4
+            self.__filter_order = 2
+            self.send_message("Warning: filter_order参数类型错误，使用默认值2")
 
     @property
     def nyquist_freq(self):
@@ -198,7 +209,7 @@ class ECGHandler(FilesBasic):
         """
         if data_length <= 0:
             return 0.1  # 防止除零错误，返回默认最小值
-            
+
         # 计算数据时长(秒)
         data_duration = data_length / self.sampling_rate
         # 最低频率是时长一半的倒数
@@ -237,7 +248,7 @@ class ECGHandler(FilesBasic):
         file_name = os.path.basename(abs_input_path)
         base_name = os.path.splitext(file_name)[0]
         abs_outfolder_path = os.path.join(self._work_folder, _data_dir,
-                                          self.out_dir_prefix + base_name)
+                                          self.out_dir_prefix + base_name + "_raw")
         os.makedirs(abs_outfolder_path, exist_ok=True)
 
         # 创建滤波后数据的输出文件夹
@@ -338,12 +349,10 @@ class ECGHandler(FilesBasic):
             pic_suffix = '_reverted'
             self.send_message(f"心电信号为负, 取反后标记为'reverted':{base_name}")
         try:
-            # 创建滤波后数据的输出文件夹
             self._advanced_process(filtered_data, adv_process_path, suffix=pic_suffix)
 
-            # 计算时长（秒）
-            data_duration = len(filtered_data) / self.sampling_rate
             # 如果时长大于10秒，则裁剪前10秒数据进行处理
+            data_duration = len(filtered_data) / self.sampling_rate
             if data_duration > 10.0:
                 # 计算10秒对应的数据点数
                 samples_10s = int(10.0 * self.sampling_rate)
@@ -351,7 +360,7 @@ class ECGHandler(FilesBasic):
                 trimmed_data = filtered_data[:samples_10s]
                 self.send_message(f"数据时长为{data_duration:.2f}秒，裁剪前10秒数据进行额外分析")
                 # 额外处理裁剪后的数据
-                self._advanced_process(trimmed_data, adv_process_path, suffix=pic_suffix + "_10s")
+                self._advanced_process(trimmed_data, adv_process_path, suffix=pic_suffix + '_10s')
         except Exception as e:
             self.send_message(f"Error in advanced ECG analysis: {str(e)}")
             self.send_message(traceback.format_exc())
@@ -574,13 +583,18 @@ class ECGHandler(FilesBasic):
             self.send_message("Warning: neurokit2库未安装，跳过高级ECG分析")
             return
 
+        # 根据最低频率确定method
+        min_freq = self.calculate_min_frequency(len(data))
+        method = 'neurokit' if min_freq <= 0.5 else 'pantompkins'
+        if method != 'neurokit':
+            self.send_message(f"Warning: 数据时长过短，改用{method}方法对ECG进一步滤波")
         try:
             # 确保数据是numpy数组
             if not isinstance(data, np.ndarray):
                 data = np.array(data, dtype=float)
 
             # 使用neurokit2进行ECG处理
-            signals, info = nk.ecg_process(data, sampling_rate=self.sampling_rate)
+            signals, info = nk.ecg_process(data, sampling_rate=self.sampling_rate, method=method)
 
             # 准备文件名后缀
             file_suffix = "orig" if suffix is None else suffix
@@ -588,14 +602,9 @@ class ECGHandler(FilesBasic):
             # 保存neurokit2的处理结果
             nk.ecg_plot(signals, info)
             fig = plt.gcf()
-            fig.set_size_inches(30, 12)
-            fig.subplots_adjust(
-                hspace=0.5,   # 子图垂直间距
-                top=0.95,     # 顶部边距
-                bottom=0.05   # 底部边距
-            )
+            fig.set_size_inches(30, 9)
             save_path = os.path.join(output_dir, f"nk_ecg_{file_suffix}.png")
-            plt.savefig(save_path, dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close(fig)
             self.send_message(f"Neurokit2处理结果已保存至: {save_path}")
 

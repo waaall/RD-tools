@@ -64,7 +64,7 @@ def main():
     window.FileWindow.selected_signal.connect(merge_colors_bind.update_user_select)
     merge_colors_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(merge_colors_bind.bind_name,
-                                        merge_colors_bind.handler_binding)
+                                         merge_colors_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(merge_colors_bind.update_setting)
 
     # =============================绑定dicom=============================
@@ -86,7 +86,7 @@ def main():
     window.FileWindow.selected_signal.connect(split_color_bind.update_user_select)
     split_color_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(split_color_bind.bind_name,
-                                        split_color_bind.handler_binding)
+                                         split_color_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(split_color_bind.update_setting)
 
     # =============================绑定TwistImgs=============================
@@ -99,7 +99,7 @@ def main():
     window.FileWindow.selected_signal.connect(twist_shape_bind.update_user_select)
     twist_shape_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(twist_shape_bind.bind_name,
-                                        twist_shape_bind.handler_binding)
+                                         twist_shape_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(twist_shape_bind.update_setting)
 
     # =============================绑定BiliVideo=============================
@@ -109,7 +109,7 @@ def main():
     window.FileWindow.selected_signal.connect(bili_videos_bind.update_user_select)
     bili_videos_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(bili_videos_bind.bind_name,
-                                        bili_videos_bind.handler_binding)
+                                         bili_videos_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(bili_videos_bind.update_setting)
 
     # =============================绑定ECGHandler=============================
@@ -119,7 +119,7 @@ def main():
     window.FileWindow.selected_signal.connect(ecg_bind.update_user_select)
     ecg_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(ecg_bind.bind_name,
-                                        ecg_bind.handler_binding)
+                                         ecg_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(ecg_bind.update_setting)
 
     # =============================绑定GenSubtitles=============================
@@ -129,7 +129,7 @@ def main():
     window.FileWindow.selected_signal.connect(gen_subtitles_bind.update_user_select)
     gen_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(gen_subtitles_bind.bind_name,
-                                        gen_subtitles_bind.handler_binding)
+                                         gen_subtitles_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(gen_subtitles_bind.update_setting)
 
     # =============================绑定SumSubtitles=============================
@@ -139,7 +139,7 @@ def main():
     window.FileWindow.selected_signal.connect(sum_subtitles_bind.update_user_select)
     sum_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(sum_subtitles_bind.bind_name,
-                                        sum_subtitles_bind.handler_binding)
+                                         sum_subtitles_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(sum_subtitles_bind.update_setting)
 
     # =============================app运行=============================

@@ -57,11 +57,11 @@
             "parallel": false,
             "out_dir_prefix": "ecg-",
             "filter_low_cut": 0.5,
-            "filter_high_cut": 35.0,
-            "filter_order":4,
-            "trim_raw_data": true,
+            "filter_high_cut": 30.0,
+            "filter_order":2,
+            "trim_raw_data": false,
             "trim_filtered_data": true,
-            "trim_percentage": 10.0,
+            "trim_percentage": 6.0,
             "time_range_short": 3.0,
             "time_range_medium": 10.0
         }
