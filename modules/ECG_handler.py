@@ -13,6 +13,7 @@
 # =========================用到的库==========================
 import os
 import sys
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -62,9 +63,13 @@ class ECGHandler(FilesBasic):
             time_range_medium: 中时域图范围(秒)
         """
         super().__init__(log_folder_name=log_folder_name, out_dir_prefix=out_dir_prefix)
+        # NeuroKit2库并行有问题
+        if parallel:
+            parallel = False
+            self.send_message("Warning: NeuroKit2库并行有问题, 已自动设置为False")
+
         self.parallel = parallel
         self.suffixs = ['.csv']  # 设置要处理的文件后缀
-
         try:
             self.__sampling_rate = int(sampling_rate)
         except ValueError:
@@ -128,27 +133,6 @@ class ECGHandler(FilesBasic):
             print("Warning: filter_order参数类型错误，使用默认值4")
             self.__filter_order = 4
 
-    def calculate_min_frequency(self, data_length: int) -> float:
-        """
-        根据数据长度计算最低频率
-        Args:
-            data_length: 数据长度（个数）
-        Returns:
-            最低频率
-        """
-        if data_length <= 0:
-            self.send_message("错误: 数据长度必须大于0")
-            return 0.1  # 返回安全的默认值
-
-        # 计算数据时长（秒）
-        data_duration = data_length / self.sampling_rate
-
-        # 最低频率 = 1 / (时长的一半)
-        min_freq = 1.0 / (data_duration / 2.0)
-
-        self.send_message(f"数据长度: {data_length}点, 时长: {data_duration:.2f}秒, 最低频率: {min_freq:.3f}Hz")
-        return min_freq
-
     @property
     def nyquist_freq(self):
         """获取奈奎斯特频率，确保返回浮点数类型"""
@@ -204,6 +188,23 @@ class ECGHandler(FilesBasic):
             self.send_message("Warning: 高频截止类型错误，返回默认值30.0")
             return 30.0
 
+    def calculate_min_frequency(self, data_length: int) -> float:
+        """
+        计算数据的最低频率
+        Args:
+            data_length: 数据长度
+        Returns:
+            最低频率(Hz)
+        """
+        if data_length <= 0:
+            return 0.1  # 防止除零错误，返回默认最小值
+            
+        # 计算数据时长(秒)
+        data_duration = data_length / self.sampling_rate
+        # 最低频率是时长一半的倒数
+        min_freq = 1.0 / (data_duration / 2.0)
+        return min_freq
+
     def _data_dir_handler(self, _data_dir: str):
         """处理单个数据文件夹, 支持串行和并行处理"""
         # 检查_data_dir,为空则终止,否则继续执行
@@ -246,6 +247,7 @@ class ECGHandler(FilesBasic):
 
         self.send_message(f"Processing CSV file: {file_name}")
 
+        # 第一部分：数据加载和预处理
         try:
             # 加载数据
             df = pd.read_csv(abs_input_path)
@@ -261,17 +263,29 @@ class ECGHandler(FilesBasic):
 
             # 计算最低频率
             min_freq = self.calculate_min_frequency(len(data))
+        except Exception as e:
+            self.send_message(f"Error in data preprocessing: {str(e)}")
+            self.send_message(traceback.format_exc())
+            return
 
+        # 第二部分：原始数据绘图
+        try:
             # 生成时域图
             self._plot_time_domain(data, abs_outfolder_path)
-
             # 生成频域图
-            self._plot_frequency_domain(data, abs_outfolder_path, min_freq=min_freq)
+            self._plot_frequency_domain(data, abs_outfolder_path,
+                                        min_freq=min_freq, is_trimmed=self.trim_raw_data)
+        except Exception as e:
+            self.send_message(f"Error in plotting original data: {str(e)}")
+            self.send_message(traceback.format_exc())
+            return
 
+        # 第三部分：滤波和滤波后数据处理
+        try:
             # 应用带通滤波器处理ECG信号
             filtered_data = self._apply_bandpass_filter(data, min_freq)
             if filtered_data is None:
-                self.send_message("Error: 滤波失败, 不进行画图操作")
+                self.send_message("Error: 滤波失败, 不进行后续处理")
                 return
 
             # 滤波后的数据时间轴
@@ -295,22 +309,55 @@ class ECGHandler(FilesBasic):
             filtered_csv_path = os.path.join(abs_filtering_path, "filtered.csv")
             filtered_df.to_csv(filtered_csv_path, index=False)
             self.send_message(f"Filtered data saved to: {filtered_csv_path}")
+        except Exception as e:
+            self.send_message(f"Error in filtering and saving filtered data: {str(e)}")
+            self.send_message(traceback.format_exc())
+            return
 
+        # 第四部分：滤波后数据绘图
+        try:
             # 生成滤波后的时域图
             self._plot_time_domain(filtered_data, abs_filtering_path)
-
             # 生成滤波后的频域图，用于验证滤波效果
-            self._plot_frequency_domain(filtered_data, abs_filtering_path)
-
+            self._plot_frequency_domain(filtered_data, abs_filtering_path, min_freq=min_freq)
             # 生成原始与滤波后的对比图
             self._plot_comparison(aligned_raw_data, filtered_data, abs_filtering_path)
-
-            self.send_message(f"Processing completed: {file_name}")
-
         except Exception as e:
-            self.send_message(f"Error processing file: {str(e)}")
-            import traceback
+            self.send_message(f"Error in plotting filtered data: {str(e)}")
             self.send_message(traceback.format_exc())
+            return
+
+        # 第五部分：高级ECG分析
+        adv_process_path = os.path.join(self._work_folder, _data_dir,
+                                        self.out_dir_prefix + base_name + "_advanced")
+        os.makedirs(adv_process_path, exist_ok=True)
+        # 检查数据的最大和最小值，如果最小值的绝对值大于最大值，则心电信号正负取反
+        pic_suffix = ''
+        if np.abs(np.min(filtered_data)) > np.max(filtered_data):
+            filtered_data = -filtered_data
+            pic_suffix = '_reverted'
+            self.send_message(f"心电信号为负, 取反后标记为'reverted':{base_name}")
+        try:
+            # 创建滤波后数据的输出文件夹
+            self._advanced_process(filtered_data, adv_process_path, suffix=pic_suffix)
+
+            # 计算时长（秒）
+            data_duration = len(filtered_data) / self.sampling_rate
+            # 如果时长大于10秒，则裁剪前10秒数据进行处理
+            if data_duration > 10.0:
+                # 计算10秒对应的数据点数
+                samples_10s = int(10.0 * self.sampling_rate)
+                # 裁剪前10秒数据
+                trimmed_data = filtered_data[:samples_10s]
+                self.send_message(f"数据时长为{data_duration:.2f}秒，裁剪前10秒数据进行额外分析")
+                # 额外处理裁剪后的数据
+                self._advanced_process(trimmed_data, adv_process_path, suffix=pic_suffix + "_10s")
+        except Exception as e:
+            self.send_message(f"Error in advanced ECG analysis: {str(e)}")
+            self.send_message(traceback.format_exc())
+            return
+
+        self.send_message(f"Processing completed: {file_name}")
 
     def _apply_bandpass_filter(self, data: np.ndarray, min_freq: float = None) -> np.ndarray:
         """
@@ -448,8 +495,8 @@ class ECGHandler(FilesBasic):
     def _plot_frequency_domain(self,
                                data: np.ndarray,
                                output_dir: str,
-                               is_trimmed: bool = None,
-                               min_freq: float = None):
+                               min_freq: float,
+                               is_trimmed: bool = None):
         """
         绘制频域信号图
         Args:
@@ -461,10 +508,6 @@ class ECGHandler(FilesBasic):
         # 根据目录判断是原始数据还是滤波后数据
         if is_trimmed is None:
             is_trimmed = self.trim_raw_data if "filtered" not in output_dir else self.trim_filtered_data
-
-        # 如果未提供最低频率，则计算
-        if min_freq is None:
-            min_freq = self.calculate_min_frequency(len(data))
 
         # 计算FFT
         n = len(data)
@@ -516,72 +559,49 @@ class ECGHandler(FilesBasic):
                 plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close(fig)  # 明确关闭图形对象
 
-    def _process_data(self, raw_data: np.ndarray, return_all: bool = False):
+    def _advanced_process(self, data: np.ndarray, output_dir: str, suffix: str = None):
         """
-        处理ECG数据，应用滤波
+        处理ECG数据，应用滤波和高级分析
         Args:
-            raw_data: 原始ECG数据
-            return_all: 不再使用，保留参数是为了兼容性
-        Returns:
-            processed_data: 处理后的ECG数据
+            data: 输入的ECG数据
+            output_dir: 输出目录路径
+            suffix: 可选的文件名后缀
         """
+        # 尝试导入neurokit2
         try:
-            # 确保raw_data是numpy数组
-            if not isinstance(raw_data, np.ndarray):
-                try:
-                    raw_data = np.array(raw_data, dtype=float)
-                except Exception as e:
-                    self.send_message(f"数据转换错误: {e}")
-                    return None
+            import neurokit2 as nk
+        except ImportError:
+            self.send_message("Warning: neurokit2库未安装，跳过高级ECG分析")
+            return
 
-            # 检查数据是否为空
-            if raw_data is None or len(raw_data) == 0:
-                self.send_message("错误: 输入数据为空")
-                return None
+        try:
+            # 确保数据是numpy数组
+            if not isinstance(data, np.ndarray):
+                data = np.array(data, dtype=float)
 
-            # 过滤掉NaN值
-            if np.isnan(raw_data).any():
-                self.send_message("Warning: 输入数据包含NaN值，已过滤")
-                raw_data = raw_data[~np.isnan(raw_data)]
+            # 使用neurokit2进行ECG处理
+            signals, info = nk.ecg_process(data, sampling_rate=self.sampling_rate)
 
-                if len(raw_data) == 0:
-                    self.send_message("错误: 过滤NaN后数据为空")
-                    return None
+            # 准备文件名后缀
+            file_suffix = "orig" if suffix is None else suffix
 
-            # 确保裁剪百分比是float类型
-            try:
-                trim_percentage = float(self.trim_percentage)
-                if not 0 <= trim_percentage < 50:
-                    self.send_message(f"Warning: 裁剪百分比{trim_percentage}超出范围，使用默认值5%")
-                    trim_percentage = 5.0
-            except (TypeError, ValueError):
-                self.send_message("Warning: 裁剪百分比格式错误，使用默认值5%")
-                trim_percentage = 5.0
-
-            # 应用带通滤波
-            filtered_data = self._apply_bandpass_filter(raw_data)
-            if filtered_data is None:
-                self.send_message("Error: 滤波失败, 不进行后续处理")
-                return None
-            # 修剪数据（去除开始和结束的一部分数据，这些数据可能不准确）
-            if self.trim_raw_data:
-                trim_samples = int(len(filtered_data) * (trim_percentage / 100))
-                trimmed_data = filtered_data[trim_samples:-trim_samples] if trim_samples > 0 else filtered_data
-            else:
-                trimmed_data = filtered_data
-
-            if len(trimmed_data) == 0:
-                self.send_message("Error: 裁剪后数据为空")
-                return None
-
-            # 只返回处理后的数据，不再返回R波峰、心率等信息
-            return trimmed_data
+            # 保存neurokit2的处理结果
+            nk.ecg_plot(signals, info)
+            fig = plt.gcf()
+            fig.set_size_inches(30, 12)
+            fig.subplots_adjust(
+                hspace=0.5,   # 子图垂直间距
+                top=0.95,     # 顶部边距
+                bottom=0.05   # 底部边距
+            )
+            save_path = os.path.join(output_dir, f"nk_ecg_{file_suffix}.png")
+            plt.savefig(save_path, dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.close(fig)
+            self.send_message(f"Neurokit2处理结果已保存至: {save_path}")
 
         except Exception as e:
-            self.send_message(f"数据处理错误: {e}")
-            import traceback
+            self.send_message(f"ECG高级处理失败: {str(e)}")
             self.send_message(traceback.format_exc())
-            return None
 
 
 # =====================main(单独执行时使用)=====================

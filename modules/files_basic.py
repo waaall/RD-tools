@@ -30,12 +30,14 @@ class FilesBasic(QObject):
     def __init__(self,
                  log_folder_name: str = 'handle_log',
                  out_dir_prefix: str = 'Out-',
-                 max_threads: int = 3):
+                 max_threads: int = 3,
+                 parallel: bool = True):
 
         super().__init__()
         # 设置消息队列(初始化顺序不是随意的)
         self.result_queue = queue.Queue()
         self.max_threads = max_threads
+        self.parallel = parallel  # 保存并行处理标志
 
         # work_folder是dicom文件夹的上一级文件夹, 之后要通过set_work_folder改
         self._work_folder = os.getcwd()
@@ -81,16 +83,25 @@ class FilesBasic(QObject):
         if not self._selected_dirs:
             return False
 
-        # 使用 ThreadPoolExecutor 并发处理每个选定的文件夹
-        max_works = min(self.max_threads, os.cpu_count(), len(self._selected_dirs))
-        with ThreadPoolExecutor(max_workers=max_works) as executor:
-            # 将每个文件夹的处理, 提交给线程池 (直接同步调用, 不再使用异步包装)
-            futures = [executor.submit(self._data_dir_handler, _data_dir)
-                       for _data_dir in self._selected_dirs]
-            # 等待所有任务完成
-            for future in futures:
+        # 根据self.parallel决定是否使用并行处理
+        if self.parallel:
+            # 使用 ThreadPoolExecutor 并发处理每个选定的文件夹
+            max_works = min(self.max_threads, os.cpu_count(), len(self._selected_dirs))
+            with ThreadPoolExecutor(max_workers=max_works) as executor:
+                # 将每个文件夹的处理, 提交给线程池 (直接同步调用, 不再使用异步包装)
+                futures = [executor.submit(self._data_dir_handler, _data_dir)
+                           for _data_dir in self._selected_dirs]
+                # 等待所有任务完成
+                for future in futures:
+                    try:
+                        future.result()  # 获取任务结果, 如果有异常会在这里抛出
+                    except Exception as e:
+                        self.send_message(f"处理文件夹时出错: {str(e)}")
+        else:
+            # 串行处理每个文件夹
+            for _data_dir in self._selected_dirs:
                 try:
-                    future.result()  # 获取任务结果, 如果有异常会在这里抛出
+                    self._data_dir_handler(_data_dir)
                 except Exception as e:
                     self.send_message(f"处理文件夹时出错: {str(e)}")
 
@@ -109,13 +120,21 @@ class FilesBasic(QObject):
         outfolder_name = self.out_dir_prefix + _data_dir
         os.makedirs(outfolder_name, exist_ok=True)
 
-        # 多线程处理单个文件
-        max_works = min(self.max_threads, os.cpu_count(), len(file_list))
-        with ThreadPoolExecutor(max_workers=max_works) as executor:
+        # 根据self.parallel决定是否使用并行处理
+        if self.parallel:
+            # 多线程处理单个文件
+            max_works = min(self.max_threads, os.cpu_count(), len(file_list))
+            with ThreadPoolExecutor(max_workers=max_works) as executor:
+                for file_name in file_list:
+                    abs_input_path = os.path.join(self._work_folder, _data_dir, file_name)
+                    abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
+                    executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path)
+        else:
+            # 串行处理单个文件
             for file_name in file_list:
                 abs_input_path = os.path.join(self._work_folder, _data_dir, file_name)
                 abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-                executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path)
+                self.single_file_handler(abs_input_path, abs_outfolder_path)
 
     # =================准确的说是每个不可拆分的子任务,子类需重写==================
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
