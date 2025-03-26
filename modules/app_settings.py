@@ -82,7 +82,7 @@ class AppSettings(QObject):
             "ecg_parallel": ([True, False],
                              "Batch_Files", "ECGHandler", "parallel"),
             "ecg_out_dir_prefix": ("Batch_Files", "ECGHandler", "out_dir_prefix"),
-            "ecg_filter_low_cut": ([0.1, 0.5, 1.0, 2.0],
+            "ecg_filter_low_cut": ([0.1, 0.5, 0.67, 0.8, 1.0, 2.0],
                                    "Batch_Files", "ECGHandler", "filter_low_cut"),
             "ecg_filter_high_cut": ([5.0, 15.0, 30.0, 50.0, 100.0],
                                     "Batch_Files", "ECGHandler", "filter_high_cut"),
