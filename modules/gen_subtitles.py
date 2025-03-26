@@ -61,58 +61,29 @@ class GenSubtitles(FilesBasic):
 
         # 检查是否有whisper-cli
         self.has_whisper_cli = shutil.which("whisper-cli") is not None
-
-        # 检查工具是否存在
-        self._check_requirements()
-
-    def _check_requirements(self) -> None:
-        """检查必需的工具是否存在"""
         # 检查ffmpeg
         if not shutil.which("ffmpeg"):
             raise RuntimeError("Error: 未找到ffmpeg命令. 请先安装ffmpeg.")
 
+    def _check_whisper_requirements(self) -> bool:
+        """检查必需的工具是否存在"""
+
         # 检查是否有whisper-cli或faster-whisper库
         if not self.has_whisper_cli and not has_faster_whisper:
             self.send_message("Error: 未找到whisper-cli或faster-whisper.请至少安装一个.")
-            return
-
-        # 验证和确定模型路径
-        valid_model_path = self._validate_model_path()
-        if valid_model_path is None:
-            self.send_message("Error: 无法找到有效的Whisper模型文件.")
-            return
-
-        self.model_path = valid_model_path
+            return False
 
         # 如果没有whisper-cli, 则加载faster-whisper模型
         if not self.has_whisper_cli and has_faster_whisper:
             self.send_message("未检测到whisper-cli, 使用faster-whisper库")
 
-            # 检测是否有CUDA可用
-            try:
-                import torch
-                cuda_available = torch.cuda.is_available()
-                if cuda_available:
-                    self.send_message("检测到CUDA可用，将使用GPU加速")
-                    device = "cuda"
-                else:
-                    self.send_message("未检测到CUDA，将使用CPU")
-                    device = "cpu"
-            except ImportError:
-                self.send_message("未安装torch或无法导入，默认使用CPU")
-                device = "cpu"
-
-            self.send_message(f"正在加载Whisper模型 '{self.model_path}'...")
-            try:
-                self.model = WhisperModel(
-                    self.model_path,
-                    device=device,
-                    compute_type=self.compute_type,
-                    local_files_only=True
-                )
-                self.send_message("模型加载完成")
-            except Exception as e:
-                self.send_message(f"加载模型失败: {e}")
+        # 验证和确定模型路径
+        valid_model_path = self._validate_model_path()
+        if valid_model_path is None:
+            self.send_message("Error: 无法找到有效的Whisper模型文件.")
+            return False
+        self.model_path = valid_model_path
+        return True
 
     def _validate_model_path(self) -> Optional[str]:
         """
@@ -139,11 +110,6 @@ class GenSubtitles(FilesBasic):
         if os.path.isfile(default_model_path) or os.path.isdir(default_model_path):
             self.send_message(f"使用默认的模型路径: {default_model_path}")
             return default_model_path
-
-        # 如果有whisper-cli, 我们可以不需要模型文件
-        if self.has_whisper_cli:
-            self.send_message("警告: 未找到模型文件, 但检测到whisper-cli, 将使用系统安装的模型")
-            return ""
 
         # 所有路径都无效
         self.send_message("Error: 所有可能的模型路径都无效")
@@ -242,6 +208,9 @@ class GenSubtitles(FilesBasic):
             self.send_message(f"Error: 音频文件 '{audio_path}' 不存在！")
             return False
 
+        if not self._check_whisper_requirements():
+            return False
+
         basename = original_video.stem
 
         # 优先使用whisper-cli
@@ -271,9 +240,33 @@ class GenSubtitles(FilesBasic):
 
         # 如果没有whisper-cli, 使用faster-whisper库
         elif has_faster_whisper:
-            self.send_message("使用faster-whisper库生成字幕")
-            output_srt_path = original_video.parent / f"{basename}.srt"
+            try:
+                import torch
+                cuda_available = torch.cuda.is_available()
+                if cuda_available:
+                    self.send_message("检测到CUDA可用，将使用GPU加速")
+                    device = "cuda"
+                else:
+                    self.send_message("未检测到CUDA，将使用CPU")
+                    device = "cpu"
+            except ImportError:
+                self.send_message("未安装torch或无法导入，默认使用CPU")
+                device = "cpu"
+
+            self.send_message(f"正在加载Whisper模型 '{self.model_path}'...")
+            try:
+                self.model = WhisperModel(
+                    self.model_path,
+                    device=device,
+                    compute_type=self.compute_type,
+                    local_files_only=True
+                )
+                self.send_message("模型加载完成")
+            except Exception as e:
+                self.send_message(f"加载模型失败: {e}")
+
             # 使用faster-whisper进行转写
+            output_srt_path = original_video.parent / f"{basename}.srt"
             self.send_message(f"开始转写 '{basename}'...")
             try:
                 segments, info = self.model.transcribe(str(audio_path),
