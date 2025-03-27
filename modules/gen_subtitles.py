@@ -58,7 +58,7 @@ class GenSubtitles(FilesBasic):
         self.parallel = parallel
         self.video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']
         self.suffixs = self.video_extensions
-
+        self.out_dir_prefix = ''
         # 检查是否有whisper-cli
         self.has_whisper_cli = shutil.which("whisper-cli") is not None
         # 检查ffmpeg
@@ -127,31 +127,6 @@ class GenSubtitles(FilesBasic):
         except Exception as e:
             self.send_message(f"读取配置文件失败: {e}")
         return ""
-
-    def _data_dir_handler(self, _data_dir: str):
-        """处理单个数据文件夹, 支持串行和并行处理"""
-        # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
-        file_list = self._get_filenames_by_suffix(_data_dir)
-        if not file_list:
-            self.send_message(f"Error: No video file in {_data_dir}")
-            return
-        outfolder_name = _data_dir  # 字幕输出到视频文件夹
-        # os.makedirs(outfolder_name, exist_ok=True)
-
-        if self.parallel:
-            # 多线程处理单个文件
-            max_works = min(self.max_threads, os.cpu_count(), len(file_list))
-            with ThreadPoolExecutor(max_workers=max_works) as executor:
-                for file_name in file_list:
-                    abs_input_path = os.path.join(self._work_folder, _data_dir, file_name)
-                    abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-                    executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path)
-        else:
-            # 串行处理单个文件
-            for file_name in file_list:
-                abs_input_path = os.path.join(self._work_folder, _data_dir, file_name)
-                abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-                self.single_file_handler(abs_input_path, abs_outfolder_path)
 
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
         """处理单个视频文件: 提取音频、生成字幕"""
