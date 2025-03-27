@@ -125,7 +125,7 @@ def main():
     # =============================绑定GenSubtitles=============================
     gen_subtitles_params = window.SettingWindow.settings.get_class_params("GenSubtitles")
     gen_subtitles_obj = GenSubtitles(**gen_subtitles_params)
-    gen_subtitles_bind = BatchFilesBinding(gen_subtitles_obj, '视频字幕生成')
+    gen_subtitles_bind = BatchFilesBinding(gen_subtitles_obj, '字幕生成')
     window.FileWindow.selected_signal.connect(gen_subtitles_bind.update_user_select)
     gen_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(gen_subtitles_bind.bind_name,
@@ -135,7 +135,7 @@ def main():
     # =============================绑定SumSubtitles=============================
     sum_subtitles_params = window.SettingWindow.settings.get_class_params("SumSubtitles")
     sum_subtitles_obj = SumSubtitles(**sum_subtitles_params)
-    sum_subtitles_bind = BatchFilesBinding(sum_subtitles_obj, '视频字幕总结')
+    sum_subtitles_bind = BatchFilesBinding(sum_subtitles_obj, '字幕总结')
     window.FileWindow.selected_signal.connect(sum_subtitles_bind.update_user_select)
     sum_subtitles_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
     window.FileWindow.add_file_operation(sum_subtitles_bind.bind_name,

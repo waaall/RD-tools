@@ -56,8 +56,9 @@ class GenSubtitles(FilesBasic):
         self.compute_type = compute_type
         self.vad_filter = vad_filter
         self.parallel = parallel
-        self.video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']
-        self.suffixs = self.video_extensions
+        _video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']
+        _audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma']
+        self.suffixs = _video_extensions + _audio_extensions
         self.out_dir_prefix = ''
         # 检查是否有whisper-cli
         self.has_whisper_cli = shutil.which("whisper-cli") is not None
@@ -129,17 +130,17 @@ class GenSubtitles(FilesBasic):
         return ""
 
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
-        """处理单个视频文件: 提取音频、生成字幕"""
+        """处理单个文件: 提取音频、生成字幕"""
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):
             self.send_message("Error: failed to check_file_path")
             return
 
-        self.send_message(f"处理视频: {os.path.basename(abs_input_path)}")
+        self.send_message(f"处理文件: {os.path.basename(abs_input_path)}")
 
         # 提取音频
         audio_path = Path(abs_input_path).parent / f"{Path(abs_input_path).stem}_audio.wav"
-        success = self._extract_audio(Path(abs_input_path), audio_path)
+        success = self._gen_whisper_audio(Path(abs_input_path), audio_path)
         if not success:
             return
 
@@ -156,8 +157,8 @@ class GenSubtitles(FilesBasic):
         if success:
             self.send_message(f"字幕生成完成: {Path(abs_input_path).stem}.srt")
 
-    def _extract_audio(self, video_path: Path, audio_path: Path) -> bool:
-        """从视频中提取音频"""
+    def _gen_whisper_audio(self, video_path: Path, audio_path: Path) -> bool:
+        """转码音频"""
         if not video_path.exists():
             self.send_message(f"Error: 视频文件 '{video_path}' 不存在！")
             return False
@@ -187,10 +188,16 @@ class GenSubtitles(FilesBasic):
             return False
 
         basename = original_video.stem
+        output_srt_path = original_video.parent / f"{basename}.srt"
+
+        # 检查字幕文件是否已存在且不为空
+        if output_srt_path.exists() and os.path.getsize(output_srt_path) > 0:
+            self.send_message(f"字幕存在所以跳过，若重新生成，请删除文件: {output_srt_path}")
+            return True
 
         # 优先使用whisper-cli
         if self.has_whisper_cli:
-            self.send_message("使用whisper-cli生成字幕")
+            self.send_message(f"使用whisper-cli生成字幕:{basename}")
             output_path = original_video.parent / basename
 
             cmd = [
@@ -211,9 +218,8 @@ class GenSubtitles(FilesBasic):
                 return True
             except subprocess.CalledProcessError:
                 self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！")
-                return False
 
-        # 如果没有whisper-cli, 使用faster-whisper库
+        # 如果没有whisper-cli或者出错, 使用faster-whisper库
         elif has_faster_whisper:
             try:
                 import torch
@@ -228,20 +234,21 @@ class GenSubtitles(FilesBasic):
                 self.send_message("未安装torch或无法导入，默认使用CPU")
                 device = "cpu"
 
-            self.send_message(f"正在加载Whisper模型 '{self.model_path}'...")
-            try:
-                self.model = WhisperModel(
-                    self.model_path,
-                    device=device,
-                    compute_type=self.compute_type,
-                    local_files_only=True
-                )
-                self.send_message("模型加载完成")
-            except Exception as e:
-                self.send_message(f"加载模型失败: {e}")
+            self.send_message(f"正在加载faster-whisper模型 '{self.model_path}'...")
+            # 避免错误加载与重复加载
+            if not hasattr(self, 'model') or self.model is None:
+                try:
+                    self.model = WhisperModel(
+                        self.model_path,
+                        device=device,
+                        compute_type=self.compute_type,
+                        local_files_only=True
+                    )
+                except Exception as e:
+                    self.model = None
+                    self.send_message(f"模型加载失败: {str(e)}")
 
             # 使用faster-whisper进行转写
-            output_srt_path = original_video.parent / f"{basename}.srt"
             self.send_message(f"开始转写 '{basename}'...")
             try:
                 segments, info = self.model.transcribe(str(audio_path),
@@ -269,7 +276,7 @@ class GenSubtitles(FilesBasic):
                         srt_file.write(f"{segment.text.strip()}\n\n")
 
                 if segment_count == 0:
-                    self.send_message("警告: 未生成任何字幕片段，请检查音频文件")
+                    self.send_message(f"Warning: 未生成任何字幕片段，请检查文件{basename}")
                     return False
 
                 self.send_message(f"字幕已保存到 '{output_srt_path}'")
@@ -277,7 +284,7 @@ class GenSubtitles(FilesBasic):
 
             except Exception as e:
                 import traceback
-                self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！原因: {e}")
+                self.send_message(f"Error: '{original_video.name}' 的字幕生成失败: {e}")
                 self.send_message(traceback.format_exc())
                 return False
         else:
