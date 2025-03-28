@@ -15,7 +15,12 @@
 # =========================用到的库==========================
 import os
 import queue
+import platform
+import subprocess
+import re
+from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, Signal
@@ -153,6 +158,19 @@ class FilesBasic(QObject):
         self.result_queue.put(message)
         self.result_signal.emit(message)
 
+    # ========================保存文件==========================
+    def _save_to_file(self, content: str, abs_file_path: str, suffix: str = '.md') -> Optional[str]:
+        """保存内容到文件"""
+        try:
+            output_path = Path(abs_file_path).with_suffix(suffix)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            self.send_message(f"已保存文件: {output_path}")
+            return str(output_path)
+        except Exception as e:
+            self.send_message(f"Error: 保存文件失败: {e}")
+            return None
+
     # =======================保存log信息========================
     def _save_log(self):
         os.makedirs(self.log_folder_name, exist_ok=True)
@@ -270,6 +288,7 @@ class FilesBasic(QObject):
             i += 1
         return pairs
 
+    # ======================提取文件名的标签和基础名称=====================
     def _extract_label_and_base(self, file_name: str, pre_or_suffix: bool, split_symbl: str):
         """
         提取文件名的标签和基础名称（去掉扩展名的部分）。
@@ -295,6 +314,129 @@ class FilesBasic(QObject):
             base_name = parts[0]  # 提取去掉扩展名的部分
 
         return current_label, base_name
+
+    # ======================获取系统中可用的中文字体=====================
+    def _get_system_cjk_font(self):
+        """
+        获取系统中可用的中文字体
+        适用于Windows、MacOS和Linux系统
+        Returns:
+            str: 找到的中文字体名称, 如果未找到则返回None
+        """
+        # 记录操作系统信息
+        os_type = platform.system()
+        self.send_message(f"当前操作系统: {os_type}")
+
+        # Windows系统
+        if os_type == "Windows":
+            # Windows系统常见中文字体
+            windows_fonts = ["SimSun", "SimHei", "Microsoft YaHei", "FangSong",
+                             "KaiTi", "NSimSun", "DengXian", "YouYuan"]
+            # 检查Windows字体文件夹
+            try:
+                font_dir = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "Fonts")
+                if os.path.exists(font_dir):
+                    files = os.listdir(font_dir)
+                    for font in windows_fonts:
+                        # 检查相关字体文件是否存在
+                        font_file = f"{font}.ttf"
+                        if font_file in files or f"{font}.ttc" in files:
+                            self.send_message(f"找到Windows中文字体: {font}")
+                            return font
+                        # 检查文件名是否包含字体名称（不区分大小写）
+                        for file in files:
+                            if file.lower().endswith(".ttf") or file.lower().endswith(".ttc"):
+                                if font.lower() in file.lower():
+                                    self.send_message(f"找到Windows中文字体: {font}")
+                                    return font
+            except Exception as e:
+                self.send_message(f"检查Windows字体时出错: {e}")
+        # macOS系统
+        elif os_type == "Darwin":
+            # macOS常见中文字体
+            mac_fonts = ["PingFang SC", "Heiti SC", "Hiragino Sans GB", "Songti SC",
+                         "Kaiti SC", "STHeiti", "STFangsong", "STSong", "STKaiti"]
+            # 尝试使用macOS的字体列表命令
+            try:
+                # 尝试检查系统字体目录
+                font_dirs = ["/System/Library/Fonts",
+                             "/Library/Fonts",
+                             os.path.expanduser("~/Library/Fonts")]
+                for font_dir in font_dirs:
+                    if os.path.exists(font_dir):
+                        for font in os.listdir(font_dir):
+                            for mac_font in mac_fonts:
+                                if (mac_font.lower().replace(" ", "").replace("-", "") in
+                                    font.lower().replace(" ", "").replace("-", "")):
+                                    self.send_message(f"找到macOS中文字体: {mac_font}")
+                                    return mac_font
+                # 如果直接检查文件失败, 尝试使用命令行工具
+                try:
+                    result = subprocess.run(
+                        ["system_profiler", "SPFontsDataType"],
+                        capture_output=True,
+                        text=True,
+                        timeout=3
+                    )
+                    output = result.stdout
+                    for font in mac_fonts:
+                        if font in output:
+                            self.send_message(f"找到macOS中文字体: {font}")
+                            return font
+                except Exception as e:
+                    self.send_message(f"检查macOS字体列表时出错: {e}")
+            except Exception as e:
+                self.send_message(f"检查macOS字体时出错: {e}")
+        # Linux系统
+        elif os_type == "Linux":
+            # Linux常见中文字体
+            linux_fonts = [
+                "Noto Sans CJK SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", 
+                "Droid Sans Fallback", "Source Han Sans CN", "Source Han Serif CN"
+            ]
+
+            # 尝试使用fc-list命令
+            try:
+                result = subprocess.run(
+                    ["fc-list", ":lang=zh"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+                output = result.stdout
+                # 先检查已知的字体
+                for font in linux_fonts:
+                    if font.lower() in output.lower():
+                        self.send_message(f"找到Linux中文字体: {font}")
+                        return font
+
+                # 提取第一个中文字体（如果有）
+                font_matches = re.findall(r":(.*?):", output)
+                if font_matches:
+                    font = font_matches[0].strip()
+                    self.send_message(f"找到Linux中文字体: {font}")
+                    return font
+                # 检查常见字体目录
+                font_dirs = [
+                    "/usr/share/fonts",
+                    "/usr/local/share/fonts",
+                    os.path.expanduser("~/.fonts")
+                ]
+                for font_dir in font_dirs:
+                    if os.path.exists(font_dir):
+                        for root, _, files in os.walk(font_dir):
+                            for file in files:
+                                if file.endswith(".ttf") or file.endswith(".ttc") or file.endswith(".otf"):
+                                    for linux_font in linux_fonts:
+                                        if (linux_font.lower().replace(" ", "").replace("-", "") in 
+                                            file.lower().replace(" ", "").replace("-", "")):
+                                            self.send_message(f"找到Linux中文字体文件: {linux_font}")
+                                            return linux_font
+            except Exception as e:
+                self.send_message(f"检查Linux字体时出错: {e}")
+        # 返回系统默认字体
+        self.send_message("未找到系统中文字体, 将使用系统默认字体")
+        return "sans"
 
 
 # ====================main(单独执行时使用)(示范)====================

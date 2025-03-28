@@ -76,6 +76,8 @@ class AppSettings(QObject):
                                         "Batch_Files", "SumSubtitles", "max_tokens"),
             "sum_subtitle_parallel": ([True, False],
                                       "Batch_Files", "SumSubtitles", "parallel"),
+            "sum_subtitle_CAPTURE_FRAME": ([True, False],
+                                           "Batch_Files", "SumSubtitles", "CAPTURE_FRAME"),
             "ecg_log_folder_name": ("Batch_Files", "ECGHandler", "log_folder_name"),
             "ecg_sampling_rate": ([100, 200, 500, 1000, 2000],
                                   "Batch_Files", "ECGHandler", "sampling_rate"),

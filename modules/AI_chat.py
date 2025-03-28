@@ -1,12 +1,12 @@
 """
     ===========================README============================
     create date:    20250322
-    change date:    20250322
+    change date:    20250328
     creator:        zhengxu
-    function:       大模型API基类及各种API实现
-    details:        支持多种API如OpenAI、Ollama、DeepSeek等
+    function:       大模型API基类及各种API实现对话类
+    details:        支持多种API如OpenAI、Ollama、DeepSeek、SiliconFlow等
 
-    version:        1.0
+    version:        2.0
 """
 # =========================用到的库==========================
 import os
@@ -27,7 +27,7 @@ class AIChatBase(ABC):
                  model_name: str = None,
                  api_key: str = None,
                  base_url: str = None,
-                 temperature: float = 0.7,
+                 temperature: float = 0.5,
                  max_tokens: int = 4096,
                  timeout: int = 120):
         """
@@ -147,9 +147,9 @@ class OpenAIChat(AIChatBase):
 
     def __init__(self,
                  model_name: str = "gpt-3.5-turbo",
-                 api_key: str = None, 
+                 api_key: str = None,
                  base_url: str = None,
-                 temperature: float = 0.7,
+                 temperature: float = 0.5,
                  max_tokens: int = 4096,
                  timeout: int = 120):
         """
@@ -193,7 +193,7 @@ class OpenAIChat(AIChatBase):
         使用OpenAI API生成文本
         Args:
             prompt: 输入的提示词
-            stream: 是否使用流式输出
+            stream: 是否使用流式输出（已禁用）
         Returns:
             包含响应文本和元数据的字典
         """
@@ -209,39 +209,15 @@ class OpenAIChat(AIChatBase):
                 messages=self.conversation_history,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                stream=stream,
+                stream=False,  # 强制禁用流式输出
                 timeout=self.timeout
             )
-            
-            if stream:
-                # 流式处理
-                collected_content = ""
-                for chunk in response:
-                    if chunk.choices and chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
-                        collected_content += content
-                        yield {"response": content, "complete": False}
-                
-                # 添加助手响应到历史
-                self.add_to_history("assistant", collected_content)
-                
-                # 最后一次返回完整内容
-                return {"response": collected_content, "complete": True}
-            else:
-                # 非流式处理
-                content = response.choices[0].message.content
-                usage = response.usage.to_dict() if hasattr(response, 'usage') else {}
-                
-                # 添加助手响应到历史
-                self.add_to_history("assistant", content, usage.get("total_tokens", 0))
-                
-                return {
-                    "response": content,
-                    "usage": usage,
-                    "model": response.model,
-                    "complete": True
-                }
-                
+            content = response.choices[0].message.content
+            usage = response.usage.to_dict() if hasattr(response, 'usage') else {}
+            # 添加助手响应到历史
+            self.add_to_history("assistant", content, usage.get("total_tokens", 0))
+            return content
+
         except Exception as e:
             self.logger.error(f"OpenAI API调用失败: {str(e)}")
             return {"error": str(e), "response": None}
@@ -252,17 +228,16 @@ class OpenAIChat(AIChatBase):
 # =========================================================
 class DeepSeekChat(OpenAIChat):
     """DeepSeek API实现 (OpenAI兼容模式)"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  model_name: str = "deepseek-chat",
-                 api_key: str = None, 
+                 api_key: str = None,
                  base_url: str = "https://api.deepseek.com/v1",
-                 temperature: float = 0.7,
+                 temperature: float = 0.5,
                  max_tokens: int = 4096,
                  timeout: int = 120):
         """
         初始化DeepSeek聊天API (OpenAI兼容模式)
-        
         Args:
             model_name: 模型名称
             api_key: DeepSeek API密钥
@@ -279,10 +254,10 @@ class DeepSeekChat(OpenAIChat):
             max_tokens=max_tokens,
             timeout=timeout
         )
-    
+
     def _get_api_key_env(self) -> str:
         return "DEEPSEEK_API_KEY"
-    
+
     def _get_default_base_url(self) -> str:
         return "https://api.deepseek.com/v1"
 
@@ -292,17 +267,16 @@ class DeepSeekChat(OpenAIChat):
 # =========================================================
 class AliChat(OpenAIChat):
     """阿里通义千问API实现 (OpenAI兼容模式)"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  model_name: str = "qwen-max",
-                 api_key: str = None, 
+                 api_key: str = None,
                  base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                 temperature: float = 0.7,
+                 temperature: float = 0.5,
                  max_tokens: int = 4096,
                  timeout: int = 120):
         """
         初始化阿里通义千问聊天API (OpenAI兼容模式)
-        
         Args:
             model_name: 模型名称
             api_key: 阿里云API密钥
@@ -319,10 +293,10 @@ class AliChat(OpenAIChat):
             max_tokens=max_tokens,
             timeout=timeout
         )
-    
+
     def _get_api_key_env(self) -> str:
         return "ALIYUN_API_KEY"
-    
+
     def _get_default_base_url(self) -> str:
         return "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
@@ -330,26 +304,33 @@ class AliChat(OpenAIChat):
 # =========================================================
 # =======          SiliconFlow API实现          =========
 # =========================================================
-class SiliconFlowChat(OpenAIChat):
-    """SiliconFlow API实现 (OpenAI兼容模式)"""
-    
-    def __init__(self, 
-                 model_name: str = "sf-lamma3-8b",
-                 api_key: str = None, 
+class SiliconFlowChat(AIChatBase):
+    """SiliconFlow API实现"""
+
+    def __init__(self,
+                 model_name: str = "Qwen/Qwen2.5-72B-Instruct-128K",
+                 api_key: str = None,
                  base_url: str = "https://api.siliconflow.cn/v1",
-                 temperature: float = 0.7,
+                 temperature: float = 0.5,
                  max_tokens: int = 4096,
-                 timeout: int = 120):
+                 timeout: int = 120,
+                 top_p: float = 0.7,
+                 top_k: int = 50,
+                 frequency_penalty: float = 0.5,
+                 n: int = 1):
         """
-        初始化SiliconFlow聊天API (OpenAI兼容模式)
-        
+        初始化SiliconFlow聊天API
         Args:
             model_name: 模型名称
             api_key: SiliconFlow API密钥
             base_url: API基础URL
             temperature: 温度参数
             max_tokens: 最大生成token数
-            timeout:
+            timeout: 请求超时时间(秒)
+            top_p: 采样参数
+            top_k: 采样参数
+            frequency_penalty: 频率惩罚
+            n: 生成数量
         """
         super().__init__(
             model_name=model_name,
@@ -359,12 +340,79 @@ class SiliconFlowChat(OpenAIChat):
             max_tokens=max_tokens,
             timeout=timeout
         )
-    
+        self.top_p = top_p
+        self.top_k = top_k
+        self.frequency_penalty = frequency_penalty
+        self.n = n
+
     def _get_api_key_env(self) -> str:
         return "SILICONFLOW_API_KEY"
-    
+
     def _get_default_base_url(self) -> str:
         return "https://api.siliconflow.cn/v1"
+
+    def generate(self, prompt: str):
+        """
+        使用SiliconFlow API生成文本
+        Args:
+            prompt: 输入的提示词
+        Returns:
+            包含响应文本和元数据的字典
+        """
+        # 添加用户消息到历史
+        self.add_to_history("user", prompt)
+
+        # 处理历史记录，确保不超过模型上下文长度
+        self.truncate_history_if_needed()
+
+        try:
+            # 构建请求数据
+            payload = {
+                "model": self.model_name,
+                "messages": self.conversation_history,
+                "stream": False,  # 强制禁用流式输出
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "top_k": self.top_k,
+                "frequency_penalty": self.frequency_penalty,
+                "n": self.n
+            }
+
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            # 发送请求
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            # 检查响应状态
+            response.raise_for_status()
+            response_data = response.json()
+
+            if "choices" not in response_data or not response_data["choices"]:
+                raise ValueError("API响应中没有choices字段")
+
+            content = response_data["choices"][0]["message"]["content"]
+            usage = response_data.get("usage", {})
+
+            # 添加助手响应到历史
+            self.add_to_history("assistant", content, usage.get("total_tokens", 0))
+
+            return content
+
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"SiliconFlow API请求失败: {str(e)}")
+            return {"error": f"API请求失败: {str(e)}", "response": None}
+        except Exception as e:
+            self.logger.error(f"SiliconFlow API调用失败: {str(e)}")
+            return {"error": str(e), "response": None}
 
 
 # =========================================================
@@ -372,8 +420,8 @@ class SiliconFlowChat(OpenAIChat):
 # =========================================================
 class OllamaChat(AIChatBase):
     """Ollama API实现 (本地部署)"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  model_name: str = "gemma3:12b",
                  api_key: str = None,  # Ollama不需要API密钥
                  base_url: str = "http://127.0.0.1:11434",
@@ -382,7 +430,6 @@ class OllamaChat(AIChatBase):
                  timeout: int = 120):
         """
         初始化Ollama聊天API
-        
         Args:
             model_name: 模型名称，如"llama2"或"mistral"等
             base_url: Ollama服务器URL
@@ -398,7 +445,7 @@ class OllamaChat(AIChatBase):
             max_tokens=max_tokens,
             timeout=timeout
         )
-        
+
         # 导入ollama库
         try:
             import ollama
@@ -419,11 +466,9 @@ class OllamaChat(AIChatBase):
     def generate(self, prompt: str, stream: bool = False) -> Dict[str, Any]:
         """
         使用Ollama API生成文本
-        
         Args:
             prompt: 输入的提示词
-            stream: 是否使用流式输出
-            
+            stream: 是否使用流式输出（已禁用）
         Returns:
             包含响应文本和元数据的字典
         """
@@ -435,70 +480,45 @@ class OllamaChat(AIChatBase):
             response = self.client.generate(
                 model=self.model_name,
                 prompt=full_prompt,
-                stream=stream,
+                stream=False,  # 强制禁用流式输出
                 options={
                     "temperature": self.temperature,
                     "num_predict": self.max_tokens
                 }
             )
-            
-            if stream:
-                # 流式处理
-                collected_content = ""
-                for chunk in response:
-                    if 'response' in chunk:
-                        content = chunk['response']
-                        collected_content += content
-                        yield {"response": content, "complete": False}
-                
-                # 添加助手回复到历史
-                self.add_to_history("assistant", collected_content)
-                
-                # 最后一次返回完整内容
-                return {"response": collected_content, "complete": True}
-            else:
-                # 非流式处理
-                content = response.get('response', '')
-                
-                # 添加助手回复到历史
-                self.add_to_history("assistant", content)
-                
-                return {
-                    "response": content,
-                    "usage": None,  # Ollama不提供token使用量
-                    "model": self.model_name,
-                    "complete": True
-                }
-                
+
+            content = response.get('response', '')
+            # 添加助手回复到历史
+            self.add_to_history("assistant", content)
+            return content
+
         except Exception as e:
             self.logger.error(f"Ollama API调用失败: {str(e)}")
             return {"error": str(e), "response": None}
-    
+
     def _build_conversation_prompt(self, prompt: str) -> str:
         """
         构建包含对话历史的提示词
-        
         Args:
             prompt: 当前用户输入
-            
         Returns:
             包含历史对话的完整提示词
         """
         # 添加用户消息到历史
         self.add_to_history("user", prompt)
-        
+
         # 处理历史，确保不超过上下文长度
         self.truncate_history_if_needed()
-        
+
         # 构建对话历史字符串
         conversation = ""
         for msg in self.conversation_history[:-1]:  # 除了最新的用户消息
             role_prefix = "User: " if msg["role"] == "user" else "Assistant: "
             conversation += f"{role_prefix}{msg['content']}\n\n"
-        
+
         # 添加最新的用户消息
         conversation += f"User: {prompt}\n\nAssistant: "
-        
+
         return conversation
 
 
@@ -508,11 +528,9 @@ class OllamaChat(AIChatBase):
 def create_chat_instance(provider: str, **kwargs) -> AIChatBase:
     """
     创建指定提供商的聊天实例
-    
     Args:
         provider: API提供商，可选值: "openai", "ollama", "deepseek", "ali", "siliconflow"
         **kwargs: 传递给构造函数的其他参数
-        
     Returns:
         AIChatBase的实例
     """
@@ -523,9 +541,40 @@ def create_chat_instance(provider: str, **kwargs) -> AIChatBase:
         "ali": AliChat,
         "siliconflow": SiliconFlowChat
     }
-    
     if provider not in providers:
         raise ValueError(f"不支持的提供商: {provider}，可选值: {', '.join(providers.keys())}")
-    
+
     chat_class = providers[provider]
-    return chat_class(**kwargs) 
+
+    # 移除不支持的参数
+    supported_params = {
+        "model_name", "api_key", "base_url", "temperature", "max_tokens",
+        "timeout", "top_p", "top_k", "frequency_penalty", "n"
+    }
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in supported_params}
+
+    return chat_class(**filtered_kwargs)
+
+
+# =========================================================
+# =======              main函数测试 API            =========
+# =========================================================
+def main():
+    # 让用户输入API密钥
+    api_key = input("请输入API密钥: ").strip()  # 获取用户输入的API密钥
+    model_name = "Qwen/Qwen2.5-72B-Instruct-128K"  # 可以更改为你想使用的模型名称
+
+    # 创建chat实例
+    chat_instance = create_chat_instance(provider='siliconflow',
+                                         api_key=api_key,
+                                         model_name=model_name)
+    # 定义要询问的提示
+    prompt = "请解释量子力学的基本原理"
+
+    # 调用generate方法获取回复
+    response = chat_instance.generate(prompt)
+    print(response)
+
+
+if __name__ == "__main__":
+    main()
