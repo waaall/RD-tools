@@ -75,8 +75,8 @@ class GenSubtitles(FilesBasic):
             return False
 
         # 如果没有whisper-cli, 则加载faster-whisper模型
-        if not self.has_whisper_cli and has_faster_whisper:
-            self.send_message("未检测到whisper-cli, 使用faster-whisper库")
+        if not has_faster_whisper and self.has_whisper_cli:
+            self.send_message("未检测到faster-whisper, 使用whisper-cli")
 
         # 验证和确定模型路径
         valid_model_path = self._validate_model_path()
@@ -163,7 +163,8 @@ class GenSubtitles(FilesBasic):
             self.send_message(f"Error: 视频文件 '{video_path}' 不存在！")
             return False
 
-        cmd = ["ffmpeg", "-i", str(video_path),
+        # -y 就是覆盖音频
+        cmd = ["ffmpeg", "-y", "-i", str(video_path),
                "-ar", "16000", "-ac", "1", "-acodec", "pcm_s16le",
                "-hide_banner", "-loglevel", "error",
                str(audio_path)]
@@ -179,7 +180,7 @@ class GenSubtitles(FilesBasic):
             return False
 
     def _generate_subtitle(self, audio_path: Path, original_video: Path) -> bool:
-        """使用whisper-cli或faster-whisper库生成字幕"""
+        """使用faster-whisper库或whisper-cli生成字幕"""
         if not audio_path.exists():
             self.send_message(f"Error: 音频文件 '{audio_path}' 不存在！")
             return False
@@ -192,46 +193,22 @@ class GenSubtitles(FilesBasic):
 
         # 检查字幕文件是否已存在且不为空
         if output_srt_path.exists() and os.path.getsize(output_srt_path) > 0:
-            self.send_message(f"字幕存在所以跳过，若重新生成，请删除文件: {output_srt_path}")
+            self.send_message(f"字幕存在所以跳过, 若重新生成, 请删除文件: {output_srt_path}")
             return True
 
-        # 优先使用whisper-cli
-        if self.has_whisper_cli:
-            self.send_message(f"使用whisper-cli生成字幕:{basename}")
-            output_path = original_video.parent / basename
-
-            cmd = [
-                "whisper-cli",
-                "--file", str(audio_path),
-                "-osrt",
-                "-of", str(output_path),
-                "--language", "auto"
-            ]
-            # 如果有指定模型路径且文件存在, 则添加模型参数
-            if self.model_path and (os.path.isfile(self.model_path) or os.path.isdir(self.model_path)):
-                cmd.insert(1, "--model")
-                cmd.insert(2, str(self.model_path))
-
-            try:
-                import subprocess
-                subprocess.run(cmd, check=True)
-                return True
-            except subprocess.CalledProcessError:
-                self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！")
-
-        # 如果没有whisper-cli或者出错, 使用faster-whisper库
-        elif has_faster_whisper:
+        # 先尝试使用faster-whisper库
+        if has_faster_whisper:
             try:
                 import torch
                 cuda_available = torch.cuda.is_available()
                 if cuda_available:
-                    self.send_message("检测到CUDA可用，将使用GPU加速")
+                    self.send_message("检测到CUDA可用, 将使用GPU加速")
                     device = "cuda"
                 else:
-                    self.send_message("未检测到CUDA，将使用CPU")
+                    self.send_message("未检测到CUDA, 将使用CPU")
                     device = "cpu"
             except ImportError:
-                self.send_message("未安装torch或无法导入，默认使用CPU")
+                self.send_message("未安装torch或无法导入, 默认使用CPU")
                 device = "cpu"
 
             self.send_message(f"正在加载faster-whisper模型 '{self.model_path}'...")
@@ -245,50 +222,78 @@ class GenSubtitles(FilesBasic):
                         local_files_only=True
                     )
                 except Exception as e:
+                    self.send_message(f"faster-whisper模型加载失败: {e}")
                     self.model = None
-                    self.send_message(f"模型加载失败: {str(e)}")
+                    # 模型加载失败, 尝试使用whisper-cli
+                    if self.has_whisper_cli:
+                        self.send_message("尝试使用whisper-cli")
+                        return self._use_whisper_cli(audio_path, original_video, basename)
+                    else:
+                        self.send_message("Error: faster-whisper模型加载失败且无法使用whisper-cli")
+                        return False
 
-            # 使用faster-whisper进行转写
-            self.send_message(f"开始转写 '{basename}'...")
-            try:
-                segments, info = self.model.transcribe(str(audio_path),
-                                                       task="transcribe",
-                                                       language=None,
-                                                       vad_filter=self.vad_filter,
-                                                       word_timestamps=False,)
-                self.send_message(f"检测到语言: {info.language}")
-            except ValueError as ve:
-                self.send_message(f"转写参数错误: {ve}")
+            self.send_message(f"faster-whisper开始转写 '{basename}'...")
+            return self._use_faster_whisper(audio_path, original_video, output_srt_path)
 
-            try:
-                # 将segments转换为SRT格式并写入文件
-                with open(output_srt_path, "w", encoding="utf-8") as srt_file:
-                    segment_count = 0
-                    for i, segment in enumerate(segments, start=1):
-                        segment_count += 1
-                        # 格式化时间（从秒转为SRT格式 HH:MM:SS,mmm）
-                        start_time = self._format_timestamp(segment.start)
-                        end_time = self._format_timestamp(segment.end)
-
-                        # 写入SRT格式
-                        srt_file.write(f"{i}\n")
-                        srt_file.write(f"{start_time} --> {end_time}\n")
-                        srt_file.write(f"{segment.text.strip()}\n\n")
-
-                if segment_count == 0:
-                    self.send_message(f"Warning: 未生成任何字幕片段，请检查文件{basename}")
-                    return False
-
-                self.send_message(f"字幕已保存到 '{output_srt_path}'")
-                return True
-
-            except Exception as e:
-                import traceback
-                self.send_message(f"Error: '{original_video.name}' 的字幕生成失败: {e}")
-                self.send_message(traceback.format_exc())
+    def _use_faster_whisper(self, audio_path: Path, original_video: Path, output_srt_path: Path) -> bool:
+        """使用faster-whisper进行转写"""
+        try:
+            segments, info = self.model.transcribe(str(audio_path),
+                                                   task="transcribe",
+                                                   language=None,
+                                                   vad_filter=self.vad_filter,
+                                                   word_timestamps=False,)
+            self.send_message(f"检测到语言: {info.language}")
+        except ValueError as ve:
+            self.send_message(f"转写参数错误: {ve}")
+            return False
+        try:
+            # 将segments转换为SRT格式并写入文件
+            with open(output_srt_path, "w", encoding="utf-8") as srt_file:
+                segment_count = 0
+                for i, segment in enumerate(segments, start=1):
+                    segment_count += 1
+                    # 格式化时间（从秒转为SRT格式 HH:MM:SS,mmm）
+                    start_time = self._format_timestamp(segment.start)
+                    end_time = self._format_timestamp(segment.end)
+                    # 写入SRT格式
+                    srt_file.write(f"{i}\n")
+                    srt_file.write(f"{start_time} --> {end_time}\n")
+                    srt_file.write(f"{segment.text.strip()}\n\n")
+            if segment_count == 0:
+                self.send_message(f"Warning: 未生成任何字幕片段, 请检查文件{audio_path}")
                 return False
-        else:
-            self.send_message("Error: 没有可用的字幕生成工具")
+            self.send_message(f"字幕已保存到 '{output_srt_path}'")
+            return True
+        except Exception as e:
+            import traceback
+            self.send_message(f"Error: '{original_video.name}' 的字幕生成失败: {e}")
+            self.send_message(traceback.format_exc())
+            return False
+
+    def _use_whisper_cli(self, audio_path: Path, original_video: Path, basename: str) -> bool:
+        """使用whisper-cli生成字幕"""
+        output_path = original_video.parent / basename
+
+        cmd = [
+            "whisper-cli",
+            "--file", str(audio_path),
+            "-osrt",
+            "-of", str(output_path),
+            "--language", "auto"
+        ]
+        # 如果有指定模型路径且文件存在, 则添加模型参数
+        if self.model_path and (os.path.isfile(self.model_path) or os.path.isdir(self.model_path)):
+            cmd.insert(1, "--model")
+            cmd.insert(2, str(self.model_path))
+
+        try:
+            import subprocess
+            subprocess.run(cmd, check=True)
+            self.send_message(f"使用whisper-cli生成字幕:{basename}")
+            return True
+        except subprocess.CalledProcessError:
+            self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！")
             return False
 
     def _format_timestamp(self, seconds: float) -> str:
