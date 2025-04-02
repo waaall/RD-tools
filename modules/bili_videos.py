@@ -32,17 +32,32 @@ from modules.files_basic import FilesBasic
 class BiliVideos(FilesBasic):
     def __init__(self,
                  log_folder_name: str = 'bili_video_handle_log',
-                 middle_file_prefix: str = 'out-',
-                 out_dir_prefix: str = 'videos-'):
+                 out_dir_prefix: str = 'fixed-',
+                 AddGroupTitle: bool = True,
+                 GroupTitleMaxLength: int = 10):
         super().__init__()
-        self.middle_file_prefix = middle_file_prefix
+
+        # 设置导出文件夹的前缀名 & log文件夹名字
+        self.log_folder_name = log_folder_name
+        self.out_dir_prefix = out_dir_prefix
+        self.AddGroupTitle = AddGroupTitle
+
+        # 验证GroupTitleMaxLength参数范围
+        if not isinstance(GroupTitleMaxLength, int):
+            GroupTitleMaxLength = 10
+            self.send_message("GroupTitleMaxLength不是整数类型, 已设为10")
+        if GroupTitleMaxLength <= 5 or GroupTitleMaxLength > 20:
+            GroupTitleMaxLength = 10
+            self.send_message("GroupTitleMaxLength不在5到20之间, 已设为10")
+        self.GroupTitleMaxLength = GroupTitleMaxLength
+
         self.suffixs = ['.m4s']
 
     # 修复音视频文件
     def __fix_m4s(self, path: str, name: str, bufsize: int = 256 * 1024 * 1024) -> None:
         assert bufsize > 0
         file = f"{path}/{name}"
-        out_file = f"{path}/{self.middle_file_prefix}{name}"
+        out_file = f"{path}/{self.out_dir_prefix}{name}"
 
         try:
             media = open(file, 'rb')
@@ -79,61 +94,61 @@ class BiliVideos(FilesBasic):
         try:
             with open(info, 'r', encoding='utf8') as f:
                 info_data = load(f)
-
-            title = ''
-            # 检查 info 文件中是否有 'groupTitle' 字段
-            if 'groupTitle' not in info_data:
-                self.send_message(f"Warning: info 文件「{info}」中缺少 'groupTitle' 字段")
-            else:
-                # 1. 限制groupTitle长度不超过10个字
-                group_title = info_data['groupTitle']
-                if len(group_title) > 10:
-                    group_title = group_title[:10]
-                    self.send_message(f"提示: groupTitle 过长，已截断为 '{group_title}'")
-
-                # 2. 删除不能作为文件名的特殊字符
-                # 移除 Windows 文件系统不支持的字符: \ / : * ? " < > |
-                invalid_chars = ['\\', '/', ':', '*', '?', '？', '。', '，',
-                                 '"', '<', '>', '|', '“', '”', '：', '`', '·']
-                for char in invalid_chars:
-                    group_title = group_title.replace(char, '')
-
-                title += group_title
-
-                # 检查 info 文件中是否有 'p' 字段
-                if 'p' not in info_data:
-                    self.send_message(f"Warning: info 文件「{info}」中缺少 'p' 字段")
-                else:
-                    p_str = '-' + str(info_data['p']) + '-'
-                    title += p_str
-
-            # 检查 info 文件中是否有 'title' 字段
-            if 'title' not in info_data:
-                self.send_message(f"Warning: info 文件「{info}」中缺少 'title' 字段")
-            else:
-                # 获取title
-                item_title = info_data['title']
-
-                # 2. 删除不能作为文件名的特殊字符
-                for char in invalid_chars:
-                    item_title = item_title.replace(char, '')
-
-                # # 3. 删除title中与groupTitle重复三个以上的字符
-                # if 'groupTitle' in info_data and len(info_data['groupTitle']) >= 3:
-                #     group_title = info_data['groupTitle']
-                #     # 查找group_title中长度超过3的子串在item_title中的位置
-                #     for i in range(len(group_title) - 2):
-                #         substr = group_title[i:i+3]  # 取三个字符的子串
-                #         if substr in item_title:
-                #             item_title = item_title.replace(substr, '')
-                #             self.send_message(f"提示: 移除了title中与groupTitle重复的子串 '{substr}'")
-
-                title += item_title
-            return title
-
         except Exception as e:
             self.send_message(f"Warning: info文件解析错误: {str(e)}")
             return None
+
+        title = ''
+        # 检查 info 文件中是否有 'groupTitle' 字段
+        if 'groupTitle' not in info_data:
+            self.send_message(f"Warning: info 文件「{info}」中缺少 'groupTitle' 字段")
+        elif self.AddGroupTitle:
+            # 1. 删除不能作为文件名的特殊字符
+            # 移除 Windows 文件系统不支持的字符: \ / : * ? " < > |
+            invalid_chars = ['\\', '/', ':', '*', '?', '？', '。', '，',
+                             '"', '<', '>', '|', '"', '"', '：', '`', '·']
+            group_title = info_data['groupTitle']
+            for char in invalid_chars:
+                group_title = group_title.replace(char, '')
+
+            # 2. 限制groupTitle长度
+            if len(group_title) > self.GroupTitleMaxLength:
+                group_title = group_title[:self.GroupTitleMaxLength]
+                self.send_message(f"提示: groupTitle 过长，已截断为 '{group_title}'")
+
+            title += group_title
+            # 检查 info 文件中是否有 'p' 字段
+            if 'p' not in info_data:
+                self.send_message(f"Warning: info 文件「{info}」中缺少 'p' 字段")
+            else:
+                p_str = '-' + str(info_data['p']) + '-'
+                title += p_str
+        else:
+            self.send_message("按照设置不添加groupTitle")
+
+        # 检查 info 文件中是否有 'title' 字段
+        if 'title' not in info_data:
+            self.send_message(f"Warning: info 文件「{info}」中缺少 'title' 字段")
+        else:
+            # 获取title
+            item_title = info_data['title']
+
+            # 2. 删除不能作为文件名的特殊字符
+            for char in invalid_chars:
+                item_title = item_title.replace(char, '')
+
+            # # 3. 删除title中与groupTitle重复三个以上的字符
+            # if 'groupTitle' in info_data and len(info_data['groupTitle']) >= 3:
+            #     group_title = info_data['groupTitle']
+            #     # 查找group_title中长度超过3的子串在item_title中的位置
+            #     for i in range(len(group_title) - 2):
+            #         substr = group_title[i:i+3]  # 取三个字符的子串
+            #         if substr in item_title:
+            #             item_title = item_title.replace(substr, '')
+            #             self.send_message(f"提示: 移除了title中与groupTitle重复的子串 '{substr}'")
+
+            title += item_title
+        return title
 
     # 转换合并函数
     def _transform(self, v, a, o):
@@ -153,7 +168,7 @@ class BiliVideos(FilesBasic):
     # 获取m4s文件名
     def _get_file_name(self, path, suffix):
         files = [f for f in os.listdir(path) if f.endswith(suffix)
-                 and not f.startswith(self.middle_file_prefix)]
+                 and not f.startswith(self.out_dir_prefix)]
 
         if len(files) < 2:
             self.send_message(f"Error: m4s获取文件失败「{path}」")
@@ -206,8 +221,8 @@ class BiliVideos(FilesBasic):
         self.send_message(f"正在处理音频文件：{names[0]}")
 
         # 名字要与__fix_m4s函数中out_file一致
-        video = f"{abs_input_path}/{self.middle_file_prefix}{names[1]}"
-        audio = f"{abs_input_path}/{self.middle_file_prefix}{names[0]}"
+        video = f"{abs_input_path}/{self.out_dir_prefix}{names[1]}"
+        audio = f"{abs_input_path}/{self.out_dir_prefix}{names[0]}"
 
         info = abs_input_path + '/videoInfo.json'
 

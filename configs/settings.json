@@ -33,6 +33,12 @@
             "frame_dpi": 200,
             "out_dir_prefix": "Img-"
         },
+        "BiliVideos": {
+            "log_folder_name": "bili_video_handle_log",
+            "out_dir_prefix": "fixed-",
+            "AddGroupTitle": true,
+            "GroupTitleMaxLength": 10
+        },
         "MergeColors": {
             "log_folder_name": "merge_color_log",
             "out_dir_prefix": "merge-"
