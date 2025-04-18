@@ -33,7 +33,11 @@ from .gen_subtitles import GenSubtitles
 # sum_subtitles
 from .sum_subtitles import SumSubtitles
 
+# mac_poop_scooper
+from .mac_poop_scooper import MacPoopScooper
+
 # bilibili videos
 from .bili_videos import BiliVideos
 
+# serial_plot
 from .serial_plot import SerialPlot

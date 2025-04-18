@@ -142,6 +142,16 @@ def main():
                                          sum_subtitles_bind.handler_binding)
     window.SettingWindow.settings.changed_signal.connect(sum_subtitles_bind.update_setting)
 
+    # =============================绑定MacPoopScooper=============================
+    mac_poop_params = window.SettingWindow.settings.get_class_params("MacPoopScooper")
+    mac_poop_obj = MacPoopScooper(**mac_poop_params)
+    mac_poop_bind = BatchFilesBinding(mac_poop_obj, 'Mac铲屎官')
+    window.FileWindow.selected_signal.connect(mac_poop_bind.update_user_select)
+    mac_poop_bind.handler_object.result_signal.connect(window.FileWindow.set_operation_result)
+    window.FileWindow.add_file_operation(mac_poop_bind.bind_name,
+                                         mac_poop_bind.handler_binding)
+    window.SettingWindow.settings.changed_signal.connect(mac_poop_bind.update_setting)
+
     # =============================app运行=============================
     window.show()
     sys.exit(app.exec())

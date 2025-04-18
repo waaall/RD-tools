@@ -48,7 +48,8 @@ class FilesBasic(QObject):
         self._work_folder = os.getcwd()
 
         # 自类重定义此量,用于查找指定后缀的文件
-        self.suffixs = ['.txt']
+        # 空字符串所有文件,例如['.txt', '.md']
+        self.suffixs = ['']
 
         # 之后会根据函数确定
         self.possble_dirs = None
@@ -170,6 +171,15 @@ class FilesBasic(QObject):
         except Exception as e:
             self.send_message(f"Error: 保存文件失败: {e}")
             return None
+
+    # =======================删除文件函数=======================
+    def _delete_file(self, poop_file_path: str):
+        try:
+            os.remove(poop_file_path)
+            self.files_deleted += 1
+            self.send_message(f"删除文件: {poop_file_path}")
+        except Exception as e:
+            self.send_message(f"删除文件失败 {poop_file_path}: {str(e)}")
 
     # =======================保存log信息========================
     def _save_log(self):
