@@ -158,7 +158,14 @@ class BiliVideos(FilesBasic):
             return False
 
         try:
-            ff = FFmpeg(inputs={v: None, a: None}, outputs={o: '-vcodec copy -acodec copy'})
+            # 添加-y参数以自动覆盖已存在的文件
+            # 添加-loglevel warning以减少输出
+            # 添加-threads 0让FFmpeg自动决定线程数
+            ff = FFmpeg(
+                inputs={v: None, a: None},
+                outputs={o: '-vcodec copy -acodec copy -y -loglevel warning -threads 0'},
+                global_options='-hide_banner'
+            )
             print(f"执行转换命令：{ff.cmd}")
             ff.run()
             return True
@@ -195,13 +202,30 @@ class BiliVideos(FilesBasic):
         paths = os.listdir(_data_dir)
         # 删除无关文件，仅保留视频所在文件夹
         folders = [p for p in paths if os.path.isdir(os.path.join(_data_dir, p))]
-        # 多线程处理单个文件
-        max_works = min(self.max_threads, os.cpu_count(), len(folders))
+
+        if not folders:
+            self.send_message(f"Error: No video folders found in {_data_dir}")
+            return
+
+        self.send_message(f"找到{len(folders)}个视频文件夹，开始处理")
+
+        # 计算合适的线程数 - 视频处理比较消耗I/O和CPU，调整线程数
+        max_works = min(min(self.max_threads, 6), os.cpu_count(), len(folders))
         with ThreadPoolExecutor(max_workers=max_works) as executor:
+            futures = []
             for folder in folders:
                 abs_input_path = os.path.join(self._work_folder, _data_dir, folder)
                 abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-                executor.submit(self.single_video_handler, abs_input_path, abs_outfolder_path)
+                futures.append(executor.submit(self.single_video_handler, abs_input_path, abs_outfolder_path))
+
+            # 等待所有任务完成并处理结果
+            for future in futures:
+                try:
+                    future.result()  # 获取任务结果
+                except Exception as e:
+                    self.send_message(f"Error: 视频处理失败: {str(e)}")
+
+        self.send_message(f"所有视频处理完成，输出目录：{outfolder_name}")
 
     # ========处理单个文件文件夹内的视频和音频，生成一个可播放的视频========
     def single_video_handler(self, abs_input_path: str, abs_outfolder_path: str):
@@ -215,6 +239,22 @@ class BiliVideos(FilesBasic):
         if len(names) != 2:
             self.send_message("Error: 配对音视频文件个数不对")
             return
+
+        # 获取视频名称
+        info = abs_input_path + '/videoInfo.json'
+        title = self._get_title(info)
+        if title is None:
+            # 如果 _get_title 返回 None，使用 names[1] 去掉后缀作为备用名称
+            title = os.path.splitext(names[1])[0]
+        else:
+            print(f"视频名称解析成功: {title}")
+        out_video = os.path.join(abs_outfolder_path, title + '.mp4')
+
+        # 检查输出文件是否已经存在
+        if os.path.exists(out_video):
+            self.send_message(f"注意: 输出文件「{out_video}」已存在，将被覆盖")
+
+        # 修复视频和音频文件
         self.__fix_m4s(abs_input_path, names[1])    # 改视频文件
         self.send_message(f"正在处理视频文件：{names[1]}")
 
@@ -225,21 +265,12 @@ class BiliVideos(FilesBasic):
         video = f"{abs_input_path}/{self.out_dir_prefix}{names[1]}"
         audio = f"{abs_input_path}/{self.out_dir_prefix}{names[0]}"
 
-        info = abs_input_path + '/videoInfo.json'
-
-        # 获取视频名称
-        title = self._get_title(info)
-        if title is None:
-            # 如果 _get_title 返回 None，使用 names[1] 去掉后缀作为备用名称
-            title = os.path.splitext(names[1])[0]
-        else:
-            print(f"视频名称解析成功: {title}")
-        out_video = os.path.join(abs_outfolder_path, title + '.mp4')
-
         # 合成音视频
         SUCCESS = self._transform(video, audio, out_video)
         if SUCCESS is True:
             self.send_message(f"SUCCESS: 「{title}」")
+        else:
+            self.send_message(f"Error: 「{title}」音视频合并失败")
 
 
 # =====================main(单独执行时使用)=====================
