@@ -52,6 +52,9 @@ class BiliVideos(FilesBasic):
         self.GroupTitleMaxLength = GroupTitleMaxLength
 
         self.suffixs = ['.m4s']
+        # Windows 文件系统不支持的字符: \ / : * ? " < > |
+        self._invalid_chars = ['\\', '/', ':', '*', '?', '？', '。', '，',
+                               '"', '<', '>', '|', '"', '"', '：', '`', '·']
 
     # 修复音视频文件
     def __fix_m4s(self, path: str, name: str, bufsize: int = 256 * 1024 * 1024) -> None:
@@ -99,16 +102,14 @@ class BiliVideos(FilesBasic):
             return None
 
         title = ''
+
         # 检查 info 文件中是否有 'groupTitle' 字段
         if 'groupTitle' not in info_data:
             self.send_message(f"Warning: info 文件「{info}」中缺少 'groupTitle' 字段")
         elif self.AddGroupTitle:
             # 1. 删除不能作为文件名的特殊字符
-            # 移除 Windows 文件系统不支持的字符: \ / : * ? " < > |
-            invalid_chars = ['\\', '/', ':', '*', '?', '？', '。', '，',
-                             '"', '<', '>', '|', '"', '"', '：', '`', '·']
             group_title = info_data['groupTitle']
-            for char in invalid_chars:
+            for char in self._invalid_chars:
                 group_title = group_title.replace(char, '')
 
             # 2. 限制groupTitle长度
@@ -134,7 +135,7 @@ class BiliVideos(FilesBasic):
             item_title = info_data['title']
 
             # 2. 删除不能作为文件名的特殊字符
-            for char in invalid_chars:
+            for char in self._invalid_chars:
                 item_title = item_title.replace(char, '')
 
             # # 3. 删除title中与groupTitle重复三个以上的字符
