@@ -31,7 +31,7 @@ from modules.files_basic import FilesBasic
 
 
 # =========================================================
-# =======                ECG数据处理类              =========
+# =======                ECG数据处理类             =========
 # =========================================================
 class ECGHandler(FilesBasic):
     def __init__(self,
@@ -42,11 +42,13 @@ class ECGHandler(FilesBasic):
                  filter_low_cut: float = 0.5,       # 滤波器低频截止
                  filter_high_cut: float = 30.0,     # 滤波器高频截止
                  filter_order: int = 2,             # 滤波器阶数
+                 drop_raw_zero: bool = False,       # 是否删除原始数据中的零值
                  trim_raw_data: bool = False,       # 是否截取原始数据
                  trim_filtered_data: bool = True,   # 是否截取滤波后数据
                  trim_percentage: float = 10.0,     # 前后截取的百分比0-20
                  time_range_short: float = 3.0,     # 短时域图范围(秒)
-                 time_range_medium: float = 10.0):  # 中时域图范围(秒)
+                 time_range_medium: float = 10.0    # 中时域图范围(秒)
+                 ):
         """
         初始化ECG处理Args:
             log_folder_name: 日志文件夹名称
@@ -61,6 +63,7 @@ class ECGHandler(FilesBasic):
             trim_percentage: 前后截取的百分比(%)
             time_range_short: 短时域图范围(秒)
             time_range_medium: 中时域图范围(秒)
+            drop_raw_zero: 是否删除原始数据中的零值
         """
         super().__init__(log_folder_name=log_folder_name, out_dir_prefix=out_dir_prefix)
         # NeuroKit2库并行有问题
@@ -91,6 +94,9 @@ class ECGHandler(FilesBasic):
         # 时域图时间范围
         self.time_range_short = time_range_short
         self.time_range_medium = time_range_medium
+
+        # 是否删除原始数据中的零值
+        self.drop_raw_zero = drop_raw_zero
 
     def __validate_filter_params(self, filter_low_cut, filter_high_cut, filter_order):
         """
@@ -263,13 +269,21 @@ class ECGHandler(FilesBasic):
             # 加载数据
             df = pd.read_csv(abs_input_path)
             data = df.iloc[:, 1].values
-            time_axis = df.iloc[:, 0].values
+
+            # 如果需要，删除数据中的零值
+            if self.drop_raw_zero and len(data) > 0:
+                # 找出非零值的索引
+                non_zero_indices = np.where(data != 0)[0]
+                if len(non_zero_indices) < len(data):
+                    # 记录原始数据长度用于消息显示
+                    original_length = len(data)
+                    data = data[non_zero_indices]
+                    self.send_message(f"删除了{original_length - len(data)}个零值 in {abs_input_path}")
 
             # 如果需要，截取原始数据前后部分
             if self.trim_raw_data and len(data) > 0:
                 trim_samples = int(len(data) * (self.trim_percentage / 100.0))
                 data = data[trim_samples:-trim_samples]
-                time_axis = time_axis[trim_samples:-trim_samples]
                 self.send_message(f"Trimmed raw data by {self.trim_percentage}%")
 
             # 计算最低频率
@@ -299,18 +313,17 @@ class ECGHandler(FilesBasic):
                 self.send_message("Error: 滤波失败, 不进行后续处理")
                 return
 
-            # 滤波后的数据时间轴
-            filtered_time_axis = time_axis.copy()
-
             # 如果需要，单独截取滤波后数据
             if self.trim_filtered_data and len(filtered_data) > 0:
                 trim_samples = int(len(filtered_data) * (self.trim_percentage / 100.0))
                 aligned_raw_data = data[trim_samples:-trim_samples]
                 filtered_data = filtered_data[trim_samples:-trim_samples]
-                filtered_time_axis = filtered_time_axis[trim_samples:-trim_samples]
                 self.send_message(f"Trimmed filtered data by {self.trim_percentage}%")
             else:
                 aligned_raw_data = data     # 原始数据和filtered_data裁减后对齐, 用于对比图
+
+            # 生成滤波后的时间轴（在需要的时候生成一次就好）
+            filtered_time_axis = np.arange(len(filtered_data)) / self.__sampling_rate
 
             # 保存滤波后的数据为CSV文件
             filtered_df = pd.DataFrame({

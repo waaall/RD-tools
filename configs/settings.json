@@ -66,6 +66,7 @@
             "filter_low_cut": 0.5,
             "filter_high_cut": 30.0,
             "filter_order":2,
+            "drop_raw_zero": false,
             "trim_raw_data": false,
             "trim_filtered_data": true,
             "trim_percentage": 6.0,

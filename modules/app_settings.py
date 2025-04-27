@@ -94,6 +94,8 @@ class AppSettings(QObject):
                                     "Batch_Files", "ECGHandler", "filter_high_cut"),
             "ecg_filter_order": ([1, 2, 4],
                                  "Batch_Files", "ECGHandler", "filter_order"),
+            "ecg_drop_raw_zero": ([True, False],
+                                  "Batch_Files", "ECGHandler", "drop_raw_zero"),
             "ecg_trim_raw_data": ([True, False], "Batch_Files", "ECGHandler", "trim_raw_data"),
             "ecg_trim_filtered_data": ([True, False],
                                        "Batch_Files", "ECGHandler", "trim_filtered_data"),
