@@ -185,9 +185,14 @@ class BiliVideos(FilesBasic):
             self.send_message(f"Error: 存在多于2个m4s文件「{path}」")
             return None
 
-        if files[0].endswith('-1-30280.m4s'):  # audio文件后缀 '-1-30280.m4s'
+        if files[0].endswith('-1-30280.m4s'):   # audio文件后缀 '-1-30280.m4s'
             return files
         elif files[1].endswith('-1-30280.m4s'):
+            files[0], files[1] = files[1], files[0]
+            return files
+        elif files[0].endswith('-1-30216.m4s'):  # 或者audio文件后缀 '-1-30216.m4s'
+            return files
+        elif files[1].endswith('-1-30216.m4s'):
             files[0], files[1] = files[1], files[0]
             return files
         else:
