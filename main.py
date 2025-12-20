@@ -3,7 +3,6 @@ import sys
 from widgets import *
 from main_window import MainWindow
 from modules import *
-import resources_rc
 
 
 # =========================================================
