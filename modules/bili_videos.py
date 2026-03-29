@@ -194,6 +194,10 @@ class BiliVideos(FilesBasic):
             return files
         elif files[1].endswith('-1-30216.m4s'):
             files[0], files[1] = files[1], files[0]
+        elif files[0].endswith('-1-30232.m4s'):  # 或者audio文件后缀 '-1-30232.m4s'
+            return files
+        elif files[1].endswith('-1-30232.m4s'):
+            files[0], files[1] = files[1], files[0]
             return files
         else:
             self.send_message(f"Error: 未找到符合条件的音频文件「{path}」")
