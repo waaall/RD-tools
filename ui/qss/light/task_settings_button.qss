@@ -1,0 +1,17 @@
+PrimaryPushButton {
+    background-color: #2aa676;
+    border: 1px solid #238d64;
+    color: white;
+}
+
+PrimaryPushButton:hover {
+    background-color: #31b57f;
+    border: 1px solid #28a572;
+    color: white;
+}
+
+PrimaryPushButton:pressed {
+    background-color: #239064;
+    border: 1px solid #1f7d57;
+    color: white;
+}

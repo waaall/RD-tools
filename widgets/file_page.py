@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
@@ -31,6 +32,7 @@ from qfluentwidgets import (
     TextEdit,
     TitleLabel,
     isDarkTheme,
+    setCustomStyleSheet,
 )
 
 from core import MessageLevel, TaskMessage, ensure_task_message
@@ -136,10 +138,12 @@ class FileWindow(QWidget):
         status_layout.addWidget(self.task_state_label, 0, Qt.AlignVCenter)
         status_layout.addStretch(1)
 
-        self.edit_settings_button = PushButton(self.overview_card)
+        self.edit_settings_button = PrimaryPushButton(self.overview_card)
         self.edit_settings_button.setObjectName('TaskSettingsButton')
         self.edit_settings_button.setText('修改设置')
         self.edit_settings_button.clicked.connect(self._open_current_task_settings)
+        self._apply_task_settings_button_theme()
+        self.edit_settings_button.hide()
         status_layout.addWidget(self.edit_settings_button)
 
         self.run_button = PrimaryPushButton(self.overview_card)
@@ -503,19 +507,19 @@ class FileWindow(QWidget):
 
     def _update_settings_button_state(self, task_key: str):
         has_settings = self._task_has_settings.get(task_key, False)
-        self.edit_settings_button.setEnabled(True)
-        self.edit_settings_button.setProperty('availability', 'enabled' if has_settings else 'disabled')
-        self.edit_settings_button.setToolTip(
-            '打开当前任务的设置项。' if has_settings else '当前任务没有可修改的设置选项。'
-        )
-        style = self.edit_settings_button.style()
-        style.unpolish(self.edit_settings_button)
-        style.polish(self.edit_settings_button)
-        self.edit_settings_button.update()
+        self.edit_settings_button.setVisible(has_settings)
+        self.edit_settings_button.setToolTip('打开当前任务的设置项。' if has_settings else '')
+
+    def _apply_task_settings_button_theme(self):
+        qss_root = Path(__file__).resolve().parent.parent / 'ui' / 'qss'
+        light_qss = (qss_root / 'light' / 'task_settings_button.qss').read_text(encoding='utf-8')
+        dark_qss = (qss_root / 'dark' / 'task_settings_button.qss').read_text(encoding='utf-8')
+        setCustomStyleSheet(self.edit_settings_button, light_qss, dark_qss)
 
     def refresh_log_view(self):
         if not self._current_task_key:
             return
+        self._update_settings_button_state(self._current_task_key)
         self._render_log_messages(self._operation_logs.get(self._current_task_key, []))
 
     def _render_log_messages(self, messages: list[TaskMessage]):
@@ -543,7 +547,7 @@ class FileWindow(QWidget):
         if isDarkTheme():
             return {
                 MessageLevel.INFO: None,
-                MessageLevel.SUCCESS: QColor('#4ade80'),
+                MessageLevel.SUCCESS: QColor('#15803d'),
                 MessageLevel.WARNING: QColor('#fbbf24'),
                 MessageLevel.ERROR: QColor('#f87171'),
             }
