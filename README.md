@@ -40,7 +40,7 @@ Function: Batch exports cached Bilibili app videos into MP4 format (similar to y
 Reference: BilibiliCacheVideoMergePython.
 
 
-### Caption Generation & Summarization
+### Caption Generation
 Core: Modified implementation based on VideoCaptioner.
 Features:
 
@@ -50,7 +50,6 @@ whisper-cpp (Linux/Mac recommended).
 faster-whisper (Windows recommended).
 Limitations:
 Translation functionality is removed.
-Summarization (using large language models) is pending completion.
 
 
 ### RGB Channel Decomposition/Synthesis

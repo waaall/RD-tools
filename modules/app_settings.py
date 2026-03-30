@@ -69,19 +69,6 @@ class AppSettings(QObject):
             "gen_subtitle_log_folder_name": ("Batch_Files", "GenSubtitles", "log_folder_name"),
             "gen_subtitle_model_path": ("Batch_Files", "GenSubtitles", "model_path"),
             "gen_subtitle_parallel": ([True, False], "Batch_Files", "GenSubtitles", "parallel"),
-            "sum_subtitle_log_folder_name": ("Batch_Files", "SumSubtitles", "log_folder_name"),
-            "sum_subtitle_api_provider": (["ollama", "openai", "deepseek", "ali", "siliconflow"], 
-                                          "Batch_Files", "SumSubtitles", "api_provider"),
-            "sum_subtitle_model_name": ("Batch_Files", "SumSubtitles", "model_name"),
-            "sum_subtitle_api_key": ("Batch_Files", "SumSubtitles", "api_key"),
-            "sum_subtitle_temperature": ([0.1, 0.2, 0.3, 0.5, 0.7, 0.9],
-                                         "Batch_Files", "SumSubtitles", "temperature"),
-            "sum_subtitle_max_tokens": ([2048, 4096, 8192],
-                                        "Batch_Files", "SumSubtitles", "max_tokens"),
-            "sum_subtitle_parallel": ([True, False],
-                                      "Batch_Files", "SumSubtitles", "parallel"),
-            "sum_subtitle_CAPTURE_FRAME": ([True, False],
-                                           "Batch_Files", "SumSubtitles", "CAPTURE_FRAME"),
             "ecg_log_folder_name": ("Batch_Files", "ECGHandler", "log_folder_name"),
             "ecg_sampling_rate": ([100, 200, 500, 1000, 2000],
                                   "Batch_Files", "ECGHandler", "sampling_rate"),
@@ -271,7 +258,7 @@ class AppSettings(QObject):
         """
         根据类名查找对应的参数，返回可用于初始化该类的参数字典
         Args:
-            class_name: 类的名称，如'SumSubtitles'
+            class_name: 类的名称，如'GenSubtitles'
         Returns:
             dict: 包含类参数的字典，可直接用于类的初始化
         """

@@ -44,12 +44,10 @@
 参考：https://github.com/molihuan/BilibiliCacheVideoMergePython
 
 
-## 2.4 字幕生成 & 字幕总结
+## 2.4 字幕生成
 参考：https://github.com/WEIFENG2333/VideoCaptioner
 
-VideoCaptioner这个项目已经做的非常好了，我也用过一段时间，但是没有Linux和Mac版，且需要安装额外的whisper模型文件。还有翻译的功能我用不到，反而是需要大模型总结的需求，所以我就根据自己的需求写了一个简单版。配置上电脑中有的whisper模型文件地址就可以(比如设置成potplayer中的faster-whisper模型)。当然代价就是需要自行配置whisper-cpp（建议linux or mac）或者faster-whisper（建议windows）。
-
-字幕总结还未完成...
+VideoCaptioner这个项目已经做的非常好了，我也用过一段时间，但是没有Linux和Mac版，且需要安装额外的whisper模型文件。还有翻译的功能我用不到，所以我就根据自己的需求写了一个简单版。配置上电脑中有的whisper模型文件地址就可以(比如设置成potplayer中的faster-whisper模型)。当然代价就是需要自行配置whisper-cpp（建议linux or mac）或者faster-whisper（建议windows）。
 
 
 ## 2.5 图片RGB通道分解/合成

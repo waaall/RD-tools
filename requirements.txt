@@ -9,9 +9,5 @@ pydicom
 PyWavelets
 neurokit2
 opencv-python
-openai
-ollama
 PyMuPDF
-markdown
-beautifulsoup4
 faster_whisper

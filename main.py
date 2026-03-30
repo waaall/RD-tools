@@ -15,7 +15,6 @@ from modules.gen_subtitles import GenSubtitles
 from modules.mac_poop_scooper import MacPoopScooper
 from modules.merge_colors import MergeColors
 from modules.split_colors import SplitColors
-from modules.sum_subtitles import SumSubtitles
 from modules.twist_shape import TwistImgs
 from ui import TaskDescriptor, apply_app_theme
 
@@ -160,13 +159,6 @@ def build_task_descriptors() -> list[TaskDescriptor]:
             description='对音视频文件批量抽取音频并生成 SRT 字幕。',
             icon=FIF.DOCUMENT,
             operation_cls=GenSubtitles,
-        ),
-        TaskDescriptor(
-            key='subtitle-summary',
-            title='字幕总结',
-            description='读取字幕内容，调用大模型生成摘要并导出 PDF。',
-            icon=FIF.LIBRARY,
-            operation_cls=SumSubtitles,
         ),
         TaskDescriptor(
             key='mac-cleaner',
