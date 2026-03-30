@@ -136,7 +136,7 @@ QListWidget#FolderList::item:hover {
     background: rgba(255, 255, 255, 0.04);
 }
 
-QPlainTextEdit#TaskLogView,
+QTextEdit#TaskLogView,
 QTextBrowser#HelpBrowser {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;

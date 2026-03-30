@@ -14,23 +14,24 @@
 """
 # =========================用到的库==========================
 import os
-import queue
 import platform
 import subprocess
 import re
+import threading
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TextIO
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, Signal
+from core import MessageLevel, TaskMessage, ensure_task_message
 
 
 # =========================================================
 # =======              文件批量处理基类             =========
 # =========================================================
 class FilesBasic(QObject):
-    result_signal = Signal(str)
+    result_signal = Signal(object)
 
     def __init__(self,
                  log_folder_name: str = 'handle_log',
@@ -39,10 +40,12 @@ class FilesBasic(QObject):
                  parallel: bool = True):
 
         super().__init__()
-        # 设置消息队列(初始化顺序不是随意的)
-        self.result_queue = queue.Queue()
         self.max_threads = max_threads
         self.parallel = parallel  # 保存并行处理标志
+        self._message_lock = threading.Lock()
+        self._log_file: TextIO | None = None
+        self._log_file_path: str | None = None
+        self._pending_log_messages: list[TaskMessage] = []
 
         # work_folder是dicom文件夹的上一级文件夹, 之后要通过set_work_folder改
         self._work_folder = os.getcwd()
@@ -69,10 +72,10 @@ class FilesBasic(QObject):
     def set_work_folder(self, work_folder: str):
         """设置工作目录, 并确保目录存在"""
         if os.path.exists(work_folder) and os.path.isdir(work_folder):
-            self._work_folder = work_folder
-            os.chdir(work_folder)
-            self.possble_dirs = [f for f in os.listdir(work_folder) if not f.startswith('.')]
-            self.send_message(f"工作目录已设置为: {os.getcwd()}")
+            self._work_folder = os.path.abspath(work_folder)
+            self.possble_dirs = [f for f in os.listdir(self._work_folder) if not f.startswith('.')]
+            self._open_log_session()
+            self.send_message(f"工作目录已设置为: {self._work_folder}", level=MessageLevel.INFO)
         else:
             raise ValueError(f"The directory {work_folder} does not exist or is not a directory.")
             # 遍历所有文件夹
@@ -80,8 +83,9 @@ class FilesBasic(QObject):
     # ===========用户选择workfolder内的selected_dirs处理===========
     def selected_dirs_handler(self, indexs_list):
         # 接收的indexs_list可以是indexs也可以是文件夹名(字符串数组)
+        self._selected_dirs = []
         if indexs_list[0] in self.possble_dirs:
-            self._selected_dirs = indexs_list
+            self._selected_dirs = list(indexs_list)
         else:
             for index in indexs_list:
                 if index in range(len(self.possble_dirs)):
@@ -102,17 +106,16 @@ class FilesBasic(QObject):
                     try:
                         future.result()  # 获取任务结果, 如果有异常会在这里抛出
                     except Exception as e:
-                        self.send_message(f"处理文件夹时出错: {str(e)}")
+                        self.send_message(f"处理文件夹时出错: {str(e)}", level=MessageLevel.ERROR)
         else:
             # 串行处理每个文件夹
             for _data_dir in self._selected_dirs:
                 try:
                     self._data_dir_handler(_data_dir)
                 except Exception as e:
-                    self.send_message(f"处理文件夹时出错: {str(e)}")
+                    self.send_message(f"处理文件夹时出错: {str(e)}", level=MessageLevel.ERROR)
 
-        self._save_log()
-        self.send_message('SUCCESS! log file saved.')
+        self.send_message('SUCCESS! log file saved.', level=MessageLevel.SUCCESS)
         return True
 
     # =====================处理单个数据文件夹函数======================
@@ -121,10 +124,11 @@ class FilesBasic(QObject):
         file_list = self._get_filenames_by_suffix(_data_dir)
         # file_list这种在每个线程不同的量(且不大),就不用self,避免多线程出问题
         if not file_list:
-            self.send_message(f"Error: No file in {_data_dir}")
+            self.send_message(f"No file in {_data_dir}", level=MessageLevel.ERROR)
             return
         outfolder_name = self.out_dir_prefix + _data_dir
-        os.makedirs(outfolder_name, exist_ok=True)
+        abs_outfolder_path = self._resolve_work_path(outfolder_name)
+        os.makedirs(abs_outfolder_path, exist_ok=True)
 
         # 根据self.parallel决定是否使用并行处理
         if self.parallel:
@@ -133,43 +137,46 @@ class FilesBasic(QObject):
             with ThreadPoolExecutor(max_workers=max_works) as executor:
                 for file_name in file_list:
                     abs_input_path = os.path.join(self._work_folder, _data_dir, file_name)
-                    abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
                     executor.submit(self.single_file_handler, abs_input_path, abs_outfolder_path)
         else:
             # 串行处理单个文件
             for file_name in file_list:
                 abs_input_path = os.path.join(self._work_folder, _data_dir, file_name)
-                abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
                 self.single_file_handler(abs_input_path, abs_outfolder_path)
 
     # =================准确的说是每个不可拆分的子任务,子类需重写==================
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):
-            self.send_message("Error: failed to check_file_path")
+            self.send_message("failed to check_file_path", level=MessageLevel.ERROR)
             return
 
         # file_name = os.path.basename(abs_input_path)
         # abs_out_path = os.path.join(abs_outfolder_path, f"o-{file_name}")
-        self.send_message("From FilesBasic: 这是基类, 请在子类中重写该方法.")
+        self.send_message("From FilesBasic: 这是基类, 请在子类中重写该方法.", level=MessageLevel.WARNING)
 
     # ========================发送log信息========================
-    def send_message(self, message):
-        print(f"From FilesBasic: \n\t{message}\n")
-        self.result_queue.put(message)
+    def send_message(self, text: str, level: MessageLevel | str | None = None):
+        message = ensure_task_message(text, level=level)
+        with self._message_lock:
+            print(f"From FilesBasic: \n\t{message.text}\n")
+            if self._log_file is not None:
+                self._write_log_entry_unlocked(message)
+            else:
+                self._pending_log_messages.append(message)
         self.result_signal.emit(message)
 
     # ========================保存文件==========================
     def _save_to_file(self, content: str, abs_file_path: str, suffix: str = '.md') -> Optional[str]:
         """保存内容到文件"""
         try:
-            output_path = Path(abs_file_path).with_suffix(suffix)
+            output_path = Path(self._resolve_work_path(abs_file_path)).with_suffix(suffix)
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            self.send_message(f"已保存文件: {output_path}")
+            self.send_message(f"已保存文件: {output_path}", level=MessageLevel.SUCCESS)
             return str(output_path)
         except Exception as e:
-            self.send_message(f"Error: 保存文件失败: {e}")
+            self.send_message(f"保存文件失败: {e}", level=MessageLevel.ERROR)
             return None
 
     # =======================删除文件函数=======================
@@ -177,32 +184,26 @@ class FilesBasic(QObject):
         try:
             os.remove(poop_file_path)
             self.files_deleted += 1
-            self.send_message(f"删除文件: {poop_file_path}")
+            self.send_message(f"删除文件: {poop_file_path}", level=MessageLevel.INFO)
         except Exception as e:
-            self.send_message(f"删除文件失败 {poop_file_path}: {str(e)}")
+            self.send_message(f"删除文件失败 {poop_file_path}: {str(e)}", level=MessageLevel.ERROR)
 
     # =======================保存log信息========================
     def _save_log(self):
-        os.makedirs(self.log_folder_name, exist_ok=True)
-        # 获取当前时间并格式化为文件名
-        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"{current_time}.log"
-        log_file_path = os.path.join(self.log_folder_name, log_filename)
-        # 打开文件并写入队列中的内容
-        with open(log_file_path, 'w') as log_file:
-            while not self.result_queue.empty():
-                log_entry = self.result_queue.get()
-                log_file.write(f"{log_entry}\n")
+        with self._message_lock:
+            if self._log_file is not None:
+                self._log_file.flush()
 
     # ====================获取符合后缀的所有文件====================
     def _get_filenames_by_suffix(self, path: str):
-        if not os.path.isdir(path):
-            self.send_message(f"Error: Folder「{path}」does not exist.")
+        abs_path = self._resolve_work_path(path)
+        if not os.path.isdir(abs_path):
+            self.send_message(f"Folder「{path}」does not exist.", level=MessageLevel.ERROR)
             return None
 
         # not f.startswith('.')不包括隐藏文件
-        return [f for f in os.listdir(path)
-                if os.path.isfile(os.path.join(path, f))
+        return [f for f in os.listdir(abs_path)
+                if os.path.isfile(os.path.join(abs_path, f))
                 and not f.startswith('.') and
                 any(f.endswith(suffix) for suffix in self.suffixs)]
 
@@ -212,16 +213,19 @@ class FilesBasic(QObject):
         符合 return True
         不符 return False
         """
+        input_path = self._resolve_work_path(input_path)
+        output_path = self._resolve_work_path(output_path)
+
         # 检查输入路径是否为文件
         if not os.path.isfile(input_path):
-            self.send_message(f"Error: Input file does not exist: {input_path}")
+            self.send_message(f"Input file does not exist: {input_path}", level=MessageLevel.ERROR)
             return False
 
         # 检查文件后缀是否合法
         file_name = os.path.basename(input_path)
         if file_name.startswith('.') or not any(file_name.endswith(suffix)
                                                 for suffix in self.suffixs):
-            self.send_message(f"Error: Invalid file name: {file_name}")
+            self.send_message(f"Invalid file name: {file_name}", level=MessageLevel.ERROR)
             return False
 
         # 检查输出路径是否为文件夹, 如果不存在则创建
@@ -230,6 +234,60 @@ class FilesBasic(QObject):
 
         # 如果一切正常, 返回 True
         return True
+
+    def close_log_session(self):
+        with self._message_lock:
+            self._close_log_session_unlocked()
+
+    def _resolve_work_path(self, path: str) -> str:
+        if os.path.isabs(path):
+            return path
+        return os.path.join(self._work_folder, path)
+
+    def _open_log_session(self):
+        log_error: OSError | None = None
+        with self._message_lock:
+            self._close_log_session_unlocked()
+            log_folder_path = self._resolve_work_path(self.log_folder_name)
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            log_file_path = os.path.join(log_folder_path, f"{current_time}.log")
+            try:
+                os.makedirs(log_folder_path, exist_ok=True)
+                self._log_file = open(log_file_path, 'a', encoding='utf-8', buffering=1)
+                self._log_file_path = log_file_path
+                pending_messages = self._pending_log_messages
+                self._pending_log_messages = []
+                for pending_message in pending_messages:
+                    self._write_log_entry_unlocked(pending_message)
+            except OSError as exc:
+                log_error = exc
+                self._log_file = None
+                self._log_file_path = None
+
+        if log_error is not None:
+            self.send_message(f"无法创建日志文件: {log_error}", level=MessageLevel.WARNING)
+
+    def _write_log_entry_unlocked(self, message: TaskMessage):
+        if self._log_file is None:
+            return
+        try:
+            self._log_file.write('\n'.join(message.to_log_lines()) + '\n')
+            self._log_file.flush()
+        except OSError:
+            self._log_file = None
+            self._log_file_path = None
+
+    def _close_log_session_unlocked(self):
+        if self._log_file is None:
+            return
+        try:
+            self._log_file.flush()
+            self._log_file.close()
+        except OSError:
+            pass
+        finally:
+            self._log_file = None
+            self._log_file_path = None
 
     # ==========================配对文件==========================
     def pair_files(self, pairs_label,
@@ -264,7 +322,7 @@ class FilesBasic(QObject):
             # 检查文件是否符合命名规则
             if current_label not in pairs_label:
                 i += 1
-                self.send_message(f"Warning: wrong naming convention「{file_name}」skipped ")
+                self.send_message(f"wrong naming convention「{file_name}」skipped", level=MessageLevel.WARNING)
                 continue
 
             # # 直接到核心, 配合下面j = i - max_pairs_lenth, 实现确定的一个找多种可能的其他
@@ -291,7 +349,7 @@ class FilesBasic(QObject):
             # 检查配对结果, 并根据情况输出提示信息
             if len(pair) == 1:
                 # 没有找到任何配对文件
-                self.send_message(f"Warning: Unmatched with {base_name}")
+                self.send_message(f"Unmatched with {base_name}", level=MessageLevel.WARNING)
             else:
                 pairs.append(pair)
 
@@ -360,7 +418,7 @@ class FilesBasic(QObject):
                                     self.send_message(f"找到Windows中文字体: {font}")
                                     return font
             except Exception as e:
-                self.send_message(f"检查Windows字体时出错: {e}")
+                self.send_message(f"检查Windows字体时出错: {e}", level=MessageLevel.ERROR)
         # macOS系统
         elif os_type == "Darwin":
             # macOS常见中文字体
@@ -394,9 +452,9 @@ class FilesBasic(QObject):
                             self.send_message(f"找到macOS中文字体: {font}")
                             return font
                 except Exception as e:
-                    self.send_message(f"检查macOS字体列表时出错: {e}")
+                    self.send_message(f"检查macOS字体列表时出错: {e}", level=MessageLevel.ERROR)
             except Exception as e:
-                self.send_message(f"检查macOS字体时出错: {e}")
+                self.send_message(f"检查macOS字体时出错: {e}", level=MessageLevel.ERROR)
         # Linux系统
         elif os_type == "Linux":
             # Linux常见中文字体
@@ -443,9 +501,9 @@ class FilesBasic(QObject):
                                             self.send_message(f"找到Linux中文字体文件: {linux_font}")
                                             return linux_font
             except Exception as e:
-                self.send_message(f"检查Linux字体时出错: {e}")
+                self.send_message(f"检查Linux字体时出错: {e}", level=MessageLevel.ERROR)
         # 返回系统默认字体
-        self.send_message("未找到系统中文字体, 将使用系统默认字体")
+        self.send_message("未找到系统中文字体, 将使用系统默认字体", level=MessageLevel.WARNING)
         return "sans"
 
 

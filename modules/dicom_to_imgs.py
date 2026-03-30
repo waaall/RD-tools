@@ -18,6 +18,7 @@ from PIL import Image
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
+from core import MessageLevel
 
 # 添加 DLL 搜索路径
 if os.name == 'nt':  # 仅在 Windows 系统上执行
@@ -25,7 +26,6 @@ if os.name == 'nt':  # 仅在 Windows 系统上执行
     libs_dir = os.path.join(current_dir, '..', 'libs')
     try:
         os.add_dll_directory(libs_dir)
-        print(f"Added DLL directory: {libs_dir}")
     except AttributeError:
         # Python < 3.8 没有 os.add_dll_directory 方法，直接修改 PATH
         os.environ['PATH'] = f"{libs_dir};" + os.environ['PATH']
@@ -56,10 +56,11 @@ class DicomToImage(FilesBasic):
         # 检查_data_dir,为空则终止,否则创建输出文件夹,继续执行
         seq_dirs = self.__check_dicomdir(_data_dir)
         if not seq_dirs:
-            self.send_message(f"Error: empty dicomdir「{_data_dir}」skipped")
+            self.send_message(f"empty dicomdir「{_data_dir}」skipped", level=MessageLevel.ERROR)
             return
         outfolder_name = self.out_dir_prefix + _data_dir
-        os.makedirs(outfolder_name, exist_ok=True)
+        abs_outfolder_path = self._resolve_work_path(outfolder_name)
+        os.makedirs(abs_outfolder_path, exist_ok=True)
 
         max_works = min(self.max_threads, os.cpu_count(), len(seq_dirs) * 2)
         with ThreadPoolExecutor(max_workers=max_works) as executor:
@@ -68,11 +69,10 @@ class DicomToImage(FilesBasic):
             for seq_dir in seq_dirs:
                 seqs_list = self._get_filenames_by_suffix(os.path.join(_data_dir, seq_dir))
                 if not seqs_list:
-                    self.send_message(f"Warning: empty seq dir「{seq_dir}」skipped")
+                    self.send_message(f"empty seq dir「{seq_dir}」skipped", level=MessageLevel.WARNING)
                     continue
                 for seq in seqs_list:
                     abs_input_path = os.path.join(self._work_folder, _data_dir, seq_dir, seq)
-                    abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
                     futures.append(executor.submit(self.single_file_handler,
                                    abs_input_path,
                                    abs_outfolder_path,
@@ -83,10 +83,9 @@ class DicomToImage(FilesBasic):
                 future.result()
 
         # 所有线程处理完成后，使用FFmpeg生成视频
-        abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
-        self.send_message("所有DICOM文件处理完成, 开始生成视频...")
+        self.send_message("所有DICOM文件处理完成, 开始生成视频...", level=MessageLevel.INFO)
         self._generate_videos_with_ffmpeg(abs_outfolder_path)
-        self.send_message("视频生成完成")
+        self.send_message("视频生成完成", level=MessageLevel.SUCCESS)
 
         return True
 
@@ -96,7 +95,7 @@ class DicomToImage(FilesBasic):
                             seq_dir_name: str = 'none'):
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):
-            self.send_message("Error: failed to check_file_path")
+            self.send_message("failed to check_file_path", level=MessageLevel.ERROR)
             return
         try:
             # 尝试读取 DICOM 文件
@@ -104,7 +103,7 @@ class DicomToImage(FilesBasic):
             # self.send_message(f"检测到DICOM文件: {abs_input_path}, 正在处理")
         except Exception:
             # 如果读取失败, 不抛出异常, 直接返回
-            self.send_message(f"Error: failed to read the dicom file「{abs_input_path}」")
+            self.send_message(f"failed to read the dicom file「{abs_input_path}」", level=MessageLevel.ERROR)
             return
         # 检查是否有多帧图像
         num_frames = ds.get('NumberOfFrames', 1)
@@ -162,32 +161,33 @@ class DicomToImage(FilesBasic):
                 image_filename = os.path.join(abs_outfolder_path,
                                               f'seq_{seq_dir_name}-{seq_name}.png')
                 image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
-                self.send_message(f'单帧 DICOM 图像已保存到 {image_filename}')
+                self.send_message(f'单帧 DICOM 图像已保存到 {image_filename}', level=MessageLevel.SUCCESS)
             else:
                 # 修改帧图片保存路径
                 image_filename = os.path.join(frames_dir, f'frame_{i + 1:04d}.png')
                 image.save(image_filename, dpi=(self.frame_dpi, self.frame_dpi))
-                self.send_message(f'视频帧已保存到 {frames_dir}，将在处理完成后生成视频')
+                self.send_message(f'视频帧已保存到 {frames_dir}，将在处理完成后生成视频', level=MessageLevel.INFO)
 
     # =====================找到DICOM序列文件夹列表======================
     def __check_dicomdir(self, _data_dir):
         try:
-            items = os.listdir(_data_dir)
+            abs_data_dir = self._resolve_work_path(_data_dir)
+            items = os.listdir(abs_data_dir)
             dicomdir_found = any(item == 'DICOMDIR'
-                                 and os.path.isfile(os.path.join(_data_dir, item))
+                                 and os.path.isfile(os.path.join(abs_data_dir, item))
                                  for item in items)
 
             folder_list = [item for item in items
-                           if os.path.isdir(os.path.join(_data_dir, item))
+                           if os.path.isdir(os.path.join(abs_data_dir, item))
                            and item != 'seq_imgs']
 
             if dicomdir_found:
                 return folder_list
             else:
-                self.send_message("DICOMDIR not found.")
+                self.send_message("DICOMDIR not found.", level=MessageLevel.WARNING)
                 return folder_list
         except Exception as e:
-            self.send_message(f"Error checking DICOMDIR: {e}")
+            self.send_message(f"checking DICOMDIR failed: {e}", level=MessageLevel.ERROR)
             return None
 
     # =====================使用FFmpeg生成所有待处理的视频======================
@@ -200,10 +200,10 @@ class DicomToImage(FilesBasic):
         # 首先检查FFmpeg是否可用
         ffmpeg_path = shutil.which('ffmpeg')
         if not ffmpeg_path:
-            self.send_message("错误: 系统中未找到FFmpeg。请安装FFmpeg后再试。")
+            self.send_message("系统中未找到FFmpeg。请安装FFmpeg后再试。", level=MessageLevel.ERROR)
             return
 
-        self.send_message(f"使用系统FFmpeg: {ffmpeg_path}")
+        self.send_message(f"使用系统FFmpeg: {ffmpeg_path}", level=MessageLevel.INFO)
 
         # 查找所有保存了视频信息的目录
         for root, dirs, files in os.walk(output_folder):
@@ -223,12 +223,12 @@ class DicomToImage(FilesBasic):
                         import glob
                         frames = glob.glob(frame_pattern)
                         if not frames:
-                            self.send_message(f"警告: 未找到帧图像: {frame_pattern}")
+                            self.send_message(f"未找到帧图像: {frame_pattern}", level=MessageLevel.WARNING)
                             continue
 
-                        self.send_message(f"找到 {len(frames)} 个帧图像，开始生成视频")
+                        self.send_message(f"找到 {len(frames)} 个帧图像，开始生成视频", level=MessageLevel.INFO)
                     except Exception as e:
-                        self.send_message(f'处理视频信息时出错: {str(e)}')
+                        self.send_message(f'处理视频信息时出错: {str(e)}', level=MessageLevel.ERROR)
 
                     # 执行FFmpeg命令生成视频
                     try:
@@ -242,11 +242,11 @@ class DicomToImage(FilesBasic):
                             check=False
                         )
                         if result.returncode == 0:
-                            self.send_message(f'视频生成成功: {output_video}')
+                            self.send_message(f'视频生成成功: {output_video}', level=MessageLevel.SUCCESS)
                         else:
-                            self.send_message(f'视频生成失败: {result.stderr}')
+                            self.send_message(f'视频生成失败: {result.stderr}', level=MessageLevel.ERROR)
                     except Exception as e:
-                        self.send_message(f'执行FFmpeg命令时出错: {str(e)}')
+                        self.send_message(f'执行FFmpeg命令时出错: {str(e)}', level=MessageLevel.ERROR)
 
 
 # =====================main(单独执行时使用)=====================

@@ -76,7 +76,7 @@ class ECGHandler(FilesBasic):
         try:
             self.__sampling_rate = int(sampling_rate)
         except ValueError:
-            print("Error: sampling_rate参数类型错误，使用默认值1000")
+            self.send_message("Error: sampling_rate参数类型错误，使用默认值1000")
             self.__sampling_rate = 1000
 
         # 计算与采样率相关的频率参数
@@ -111,7 +111,7 @@ class ECGHandler(FilesBasic):
             low_cut = float(filter_low_cut)
             # 确保低频截止值在0.1-1.0之间
             if low_cut < 0.1:
-                print(f"Warning: filter_low_cut值过小: {low_cut}, 已调整为0.1")
+                self.send_message(f"Warning: filter_low_cut值过小: {low_cut}, 已调整为0.1")
                 self.__filter_low_cut = 0.1
             elif low_cut > 1.0:
                 self.__filter_low_cut = 1.0
@@ -119,7 +119,7 @@ class ECGHandler(FilesBasic):
             else:
                 self.__filter_low_cut = low_cut
         except (ValueError, TypeError):
-            print(f"Error: filter_low_cut无法转换为浮点数: {filter_low_cut}, 使用默认值0.5")
+            self.send_message(f"Error: filter_low_cut无法转换为浮点数: {filter_low_cut}, 使用默认值0.5")
             self.__filter_low_cut = 0.5
 
         # 验证高频截止
@@ -127,12 +127,12 @@ class ECGHandler(FilesBasic):
             high_cut = float(filter_high_cut)
             # 确保高频截止不超过奈奎斯特频率
             if high_cut > self.__nyquist_freq:
-                print(f"Warning: filter_high_cut值过大: {high_cut}, 已调整为{self.__nyquist_freq * 0.9}")
+                self.send_message(f"Warning: filter_high_cut值过大: {high_cut}, 已调整为{self.__nyquist_freq * 0.9}")
                 self.__filter_high_cut = self.__nyquist_freq * 0.9
             else:
                 self.__filter_high_cut = high_cut
         except (ValueError, TypeError):
-            print(f"Error: filter_high_cut无法转换为浮点数: {filter_high_cut}, 使用默认值30.0")
+            self.send_message(f"Error: filter_high_cut无法转换为浮点数: {filter_high_cut}, 使用默认值30.0")
             self.__filter_high_cut = 30.0
 
         # 验证滤波器阶数

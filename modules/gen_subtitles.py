@@ -29,6 +29,7 @@ except ImportError:
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
+from core import MessageLevel
 
 
 # =========================================================
@@ -71,17 +72,17 @@ class GenSubtitles(FilesBasic):
 
         # 检查是否有whisper-cli或faster-whisper库
         if not self.has_whisper_cli and not has_faster_whisper:
-            self.send_message("Error: 未找到whisper-cli或faster-whisper.请至少安装一个.")
+            self.send_message("未找到whisper-cli或faster-whisper.请至少安装一个.", level=MessageLevel.ERROR)
             return False
 
         # 如果没有whisper-cli, 则加载faster-whisper模型
         if not has_faster_whisper and self.has_whisper_cli:
-            self.send_message("未检测到faster-whisper, 使用whisper-cli")
+            self.send_message("未检测到faster-whisper, 使用whisper-cli", level=MessageLevel.WARNING)
 
         # 验证和确定模型路径
         valid_model_path = self._validate_model_path()
         if valid_model_path is None:
-            self.send_message("Error: 无法找到有效的Whisper模型文件.")
+            self.send_message("无法找到有效的Whisper模型文件.", level=MessageLevel.ERROR)
             return False
         self.model_path = valid_model_path
         return True
@@ -96,24 +97,24 @@ class GenSubtitles(FilesBasic):
         """
         # 1. 检查用户指定的路径
         if self.model_path and (os.path.isfile(self.model_path) or os.path.isdir(self.model_path)):
-            self.send_message(f"使用用户指定的模型路径: {self.model_path}")
+            self.send_message(f"使用用户指定的模型路径: {self.model_path}", level=MessageLevel.INFO)
             return self.model_path
 
         # 2. 检查配置文件中的路径
         config_model_path = self._get_path_from_config()
         if config_model_path and (os.path.isfile(config_model_path) or os.path.isdir(config_model_path)):
-            self.send_message(f"使用配置文件中的模型路径: {config_model_path}")
+            self.send_message(f"使用配置文件中的模型路径: {config_model_path}", level=MessageLevel.INFO)
             return config_model_path
 
         # 3. 检查默认路径
         default_model_path = os.path.join(self.user_home_path,
                                           "Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin")
         if os.path.isfile(default_model_path) or os.path.isdir(default_model_path):
-            self.send_message(f"使用默认的模型路径: {default_model_path}")
+            self.send_message(f"使用默认的模型路径: {default_model_path}", level=MessageLevel.INFO)
             return default_model_path
 
         # 所有路径都无效
-        self.send_message("Error: 所有可能的模型路径都无效")
+        self.send_message("所有可能的模型路径都无效", level=MessageLevel.ERROR)
         return None
 
     def _get_path_from_config(self) -> str:
@@ -126,17 +127,17 @@ class GenSubtitles(FilesBasic):
                     if "Batch_Files" in config and "GenSubtitles" in config["Batch_Files"]:
                         return config["Batch_Files"]["GenSubtitles"].get("model_path", "")
         except Exception as e:
-            self.send_message(f"读取配置文件失败: {e}")
+            self.send_message(f"读取配置文件失败: {e}", level=MessageLevel.ERROR)
         return ""
 
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
         """处理单个文件: 提取音频、生成字幕"""
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):
-            self.send_message("Error: failed to check_file_path")
+            self.send_message("failed to check_file_path", level=MessageLevel.ERROR)
             return
 
-        self.send_message(f"处理文件: {os.path.basename(abs_input_path)}")
+        self.send_message(f"处理文件: {os.path.basename(abs_input_path)}", level=MessageLevel.INFO)
 
         # 提取音频
         audio_path = Path(abs_input_path).parent / f"{Path(abs_input_path).stem}_audio.wav"
@@ -152,15 +153,15 @@ class GenSubtitles(FilesBasic):
             try:
                 os.remove(audio_path)
             except OSError as e:
-                self.send_message(f"Warning: 无法删除临时音频文件 '{audio_path}': {e}")
+                self.send_message(f"无法删除临时音频文件 '{audio_path}': {e}", level=MessageLevel.WARNING)
 
         if success:
-            self.send_message(f"字幕生成完成: {Path(abs_input_path).stem}.srt")
+            self.send_message(f"字幕生成完成: {Path(abs_input_path).stem}.srt", level=MessageLevel.SUCCESS)
 
     def _gen_whisper_audio(self, video_path: Path, audio_path: Path) -> bool:
         """转码音频"""
         if not video_path.exists():
-            self.send_message(f"Error: 视频文件 '{video_path}' 不存在！")
+            self.send_message(f"视频文件 '{video_path}' 不存在！", level=MessageLevel.ERROR)
             return False
 
         # -y 就是覆盖音频
@@ -176,13 +177,13 @@ class GenSubtitles(FilesBasic):
             os.chmod(audio_path, 0o777)
             return True
         except subprocess.CalledProcessError:
-            self.send_message(f"Error: '{video_path.name}' 的音频提取失败！")
+            self.send_message(f"'{video_path.name}' 的音频提取失败！", level=MessageLevel.ERROR)
             return False
 
     def _generate_subtitle(self, audio_path: Path, original_video: Path) -> bool:
         """使用faster-whisper库或whisper-cli生成字幕"""
         if not audio_path.exists():
-            self.send_message(f"Error: 音频文件 '{audio_path}' 不存在！")
+            self.send_message(f"音频文件 '{audio_path}' 不存在！", level=MessageLevel.ERROR)
             return False
 
         if not self._check_whisper_requirements():
@@ -193,7 +194,7 @@ class GenSubtitles(FilesBasic):
 
         # 检查字幕文件是否已存在且不为空
         if output_srt_path.exists() and os.path.getsize(output_srt_path) > 0:
-            self.send_message(f"字幕存在所以跳过, 若重新生成, 请删除文件: {output_srt_path}")
+            self.send_message(f"字幕存在所以跳过, 若重新生成, 请删除文件: {output_srt_path}", level=MessageLevel.WARNING)
             return True
 
         # 先尝试使用faster-whisper库
@@ -202,16 +203,16 @@ class GenSubtitles(FilesBasic):
                 import torch
                 cuda_available = torch.cuda.is_available()
                 if cuda_available:
-                    self.send_message("检测到CUDA可用, 将使用GPU加速")
+                    self.send_message("检测到CUDA可用, 将使用GPU加速", level=MessageLevel.INFO)
                     device = "cuda"
                 else:
-                    self.send_message("未检测到CUDA, 将使用CPU")
+                    self.send_message("未检测到CUDA, 将使用CPU", level=MessageLevel.INFO)
                     device = "cpu"
             except ImportError:
-                self.send_message("未安装torch或无法导入, 默认使用CPU")
+                self.send_message("未安装torch或无法导入, 默认使用CPU", level=MessageLevel.WARNING)
                 device = "cpu"
 
-            self.send_message(f"正在加载faster-whisper模型 '{self.model_path}'...")
+            self.send_message(f"正在加载faster-whisper模型 '{self.model_path}'...", level=MessageLevel.INFO)
             # 避免错误加载与重复加载
             if not hasattr(self, 'model') or self.model is None:
                 try:
@@ -222,17 +223,17 @@ class GenSubtitles(FilesBasic):
                         local_files_only=True
                     )
                 except Exception as e:
-                    self.send_message(f"faster-whisper模型加载失败: {e}")
+                    self.send_message(f"faster-whisper模型加载失败: {e}", level=MessageLevel.ERROR)
                     self.model = None
                     # 模型加载失败, 尝试使用whisper-cli
                     if self.has_whisper_cli:
-                        self.send_message("尝试使用whisper-cli")
+                        self.send_message("尝试使用whisper-cli", level=MessageLevel.WARNING)
                         return self._use_whisper_cli(audio_path, original_video, basename)
                     else:
-                        self.send_message("Error: faster-whisper模型加载失败且无法使用whisper-cli")
+                        self.send_message("faster-whisper模型加载失败且无法使用whisper-cli", level=MessageLevel.ERROR)
                         return False
 
-            self.send_message(f"faster-whisper开始转写 '{basename}'...")
+            self.send_message(f"faster-whisper开始转写 '{basename}'...", level=MessageLevel.INFO)
             return self._use_faster_whisper(audio_path, original_video, output_srt_path)
 
     def _use_faster_whisper(self, audio_path: Path, original_video: Path, output_srt_path: Path) -> bool:
@@ -243,9 +244,9 @@ class GenSubtitles(FilesBasic):
                                                    language=None,
                                                    vad_filter=self.vad_filter,
                                                    word_timestamps=False,)
-            self.send_message(f"检测到语言: {info.language}")
+            self.send_message(f"检测到语言: {info.language}", level=MessageLevel.INFO)
         except ValueError as ve:
-            self.send_message(f"转写参数错误: {ve}")
+            self.send_message(f"转写参数错误: {ve}", level=MessageLevel.ERROR)
             return False
         try:
             # 将segments转换为SRT格式并写入文件
@@ -261,14 +262,14 @@ class GenSubtitles(FilesBasic):
                     srt_file.write(f"{start_time} --> {end_time}\n")
                     srt_file.write(f"{segment.text.strip()}\n\n")
             if segment_count == 0:
-                self.send_message(f"Warning: 未生成任何字幕片段, 请检查文件{audio_path}")
+                self.send_message(f"未生成任何字幕片段, 请检查文件{audio_path}", level=MessageLevel.WARNING)
                 return False
-            self.send_message(f"字幕已保存到 '{output_srt_path}'")
+            self.send_message(f"字幕已保存到 '{output_srt_path}'", level=MessageLevel.SUCCESS)
             return True
         except Exception as e:
             import traceback
-            self.send_message(f"Error: '{original_video.name}' 的字幕生成失败: {e}")
-            self.send_message(traceback.format_exc())
+            self.send_message(f"'{original_video.name}' 的字幕生成失败: {e}", level=MessageLevel.ERROR)
+            self.send_message(traceback.format_exc(), level=MessageLevel.ERROR)
             return False
 
     def _use_whisper_cli(self, audio_path: Path, original_video: Path, basename: str) -> bool:
@@ -290,10 +291,10 @@ class GenSubtitles(FilesBasic):
         try:
             import subprocess
             subprocess.run(cmd, check=True)
-            self.send_message(f"使用whisper-cli生成字幕:{basename}")
+            self.send_message(f"使用whisper-cli生成字幕:{basename}", level=MessageLevel.INFO)
             return True
         except subprocess.CalledProcessError:
-            self.send_message(f"Error: '{original_video.name}' 的字幕生成失败！")
+            self.send_message(f"'{original_video.name}' 的字幕生成失败！", level=MessageLevel.ERROR)
             return False
 
     def _format_timestamp(self, seconds: float) -> str:

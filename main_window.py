@@ -59,9 +59,11 @@ class MainWindow(FluentWindow):
 
     def apply_theme(self, theme_name: str):
         apply_app_theme(theme_name, QApplication.instance())
+        self.FileWindow.refresh_log_view()
 
     def refresh_theme(self):
         apply_app_theme(self.settings.theme, QApplication.instance())
+        self.FileWindow.refresh_log_view()
 
     def closeEvent(self, event: QCloseEvent):
         if self._theme_listener.isRunning():

@@ -16,11 +16,12 @@ from modules.mac_poop_scooper import MacPoopScooper
 from modules.merge_colors import MergeColors
 from modules.split_colors import SplitColors
 from modules.twist_shape import TwistImgs
+from core import MessageLevel, TaskMessage
 from ui import TaskDescriptor, apply_app_theme
 
 
 class BatchFilesBinding(QThread):
-    result_signal = Signal(str, str)
+    result_signal = Signal(str, object)
     running_changed = Signal(str, bool)
     completed = Signal(str, bool, str)
 
@@ -52,7 +53,7 @@ class BatchFilesBinding(QThread):
     def update_setting(self, object_name, attribute, value):
         if self.handler_object.__class__.__name__ == object_name and hasattr(self.handler_object, attribute):
             setattr(self.handler_object, attribute, value)
-            print(f'From BatchFilesBinding:\n\tUpdated {attribute} to {value} in {object_name}\n')
+            self.handler_object.send_message(f'Updated {attribute} to {value} in {object_name}')
 
     def run(self):
         self._run_error = None
@@ -61,25 +62,39 @@ class BatchFilesBinding(QThread):
             self.handler_object.selected_dirs_handler(self.wanted_items)
         except Exception as exc:
             self._run_error = str(exc)
-            self.result_signal.emit(self.task_key, f'Error: {self._run_error}')
+            self.result_signal.emit(
+                self.task_key,
+                TaskMessage.build(f'任务执行失败: {self._run_error}', level=MessageLevel.ERROR),
+            )
+        finally:
+            self.handler_object.close_log_session()
 
     def handler_binding(self):
         if self.isRunning():
-            self.file_window.append_operation_log(self.task_key, '任务仍在运行，请稍候。')
+            self.file_window.append_operation_log(
+                self.task_key,
+                TaskMessage.build('任务仍在运行，请稍候。', level=MessageLevel.WARNING),
+            )
             return
 
         work_folder, wanted_items = self.file_window.get_selected_directories()
         if not work_folder:
             message = '请先选择工作目录。'
             self.file_window.set_selection_status(message, is_error=True)
-            self.file_window.append_operation_log(self.task_key, f'未执行：{message}')
+            self.file_window.append_operation_log(
+                self.task_key,
+                TaskMessage.build(f'未执行：{message}', level=MessageLevel.WARNING),
+            )
             self.file_window.notify_blocking_issue(message)
             return
 
         if not wanted_items:
             message = '请至少勾选一个待处理目录。'
             self.file_window.set_selection_status(message, is_error=True)
-            self.file_window.append_operation_log(self.task_key, f'未执行：{message}')
+            self.file_window.append_operation_log(
+                self.task_key,
+                TaskMessage.build(f'未执行：{message}', level=MessageLevel.WARNING),
+            )
             self.file_window.notify_blocking_issue(message)
             return
 

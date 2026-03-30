@@ -24,6 +24,7 @@ from json import load
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
+from core import MessageLevel
 
 
 # =========================================================
@@ -45,10 +46,10 @@ class BiliVideos(FilesBasic):
         # 验证GroupTitleMaxLength参数范围
         if not isinstance(GroupTitleMaxLength, int):
             GroupTitleMaxLength = 10
-            self.send_message("GroupTitleMaxLength不是整数类型, 已设为10")
+            self.send_message("GroupTitleMaxLength不是整数类型, 已设为10", level=MessageLevel.WARNING)
         if GroupTitleMaxLength <= 5 or GroupTitleMaxLength > 20:
             GroupTitleMaxLength = 10
-            self.send_message("GroupTitleMaxLength不在5到20之间, 已设为10")
+            self.send_message("GroupTitleMaxLength不在5到20之间, 已设为10", level=MessageLevel.WARNING)
         self.GroupTitleMaxLength = GroupTitleMaxLength
 
         self.suffixs = ['.m4s']
@@ -68,7 +69,7 @@ class BiliVideos(FilesBasic):
 
             # 判断头文件是否符合预期
             if b'000000000' not in header:
-                self.send_message(f"Warning: 文件 {file} 的头文件不符合预期")
+                self.send_message(f"文件 {file} 的头文件不符合预期", level=MessageLevel.WARNING)
                 return
             new_header = header.replace(b'000000000', b'')
 
@@ -81,9 +82,9 @@ class BiliVideos(FilesBasic):
                 out_media.write(buf)
                 buf = media.read(bufsize)
 
-            self.send_message(f"文件修复完成并保存为「{out_file}」")
+            self.send_message(f"文件修复完成并保存为「{out_file}」", level=MessageLevel.SUCCESS)
         except Exception as e:
-            self.send_message(f"Error: 修复文件时发生错误: {str(e)}")
+            self.send_message(f"修复文件时发生错误: {str(e)}", level=MessageLevel.ERROR)
         finally:
             media.close()
             out_media.close()
@@ -91,21 +92,21 @@ class BiliVideos(FilesBasic):
     # 解析json文件, 获取标题, 将其返回
     def _get_title(self, info):
         if not os.path.exists(info):
-            self.send_message(f"Warning: info 文件「{info}」不存在")
+            self.send_message(f"info 文件「{info}」不存在", level=MessageLevel.WARNING)
             return None
 
         try:
             with open(info, 'r', encoding='utf8') as f:
                 info_data = load(f)
         except Exception as e:
-            self.send_message(f"Warning: info文件解析错误: {str(e)}")
+            self.send_message(f"info文件解析错误: {str(e)}", level=MessageLevel.WARNING)
             return None
 
         title = ''
 
         # 检查 info 文件中是否有 'groupTitle' 字段
         if 'groupTitle' not in info_data:
-            self.send_message(f"Warning: info 文件「{info}」中缺少 'groupTitle' 字段")
+            self.send_message(f"info 文件「{info}」中缺少 'groupTitle' 字段", level=MessageLevel.WARNING)
         elif self.AddGroupTitle:
             # 1. 删除不能作为文件名的特殊字符
             group_title = info_data['groupTitle']
@@ -115,21 +116,21 @@ class BiliVideos(FilesBasic):
             # 2. 限制groupTitle长度
             if len(group_title) > self.GroupTitleMaxLength:
                 group_title = group_title[:self.GroupTitleMaxLength]
-                self.send_message(f"提示: groupTitle 过长，已截断为 '{group_title}'")
+                self.send_message(f"groupTitle 过长，已截断为 '{group_title}'", level=MessageLevel.WARNING)
 
             title += group_title
             # 检查 info 文件中是否有 'p' 字段
             if 'p' not in info_data:
-                self.send_message(f"Warning: info 文件「{info}」中缺少 'p' 字段")
+                self.send_message(f"info 文件「{info}」中缺少 'p' 字段", level=MessageLevel.WARNING)
             else:
                 p_str = '-' + str(info_data['p']) + '-'
                 title += p_str
         else:
-            self.send_message("按照设置不添加groupTitle")
+            self.send_message("按照设置不添加groupTitle", level=MessageLevel.INFO)
 
         # 检查 info 文件中是否有 'title' 字段
         if 'title' not in info_data:
-            self.send_message(f"Warning: info 文件「{info}」中缺少 'title' 字段")
+            self.send_message(f"info 文件「{info}」中缺少 'title' 字段", level=MessageLevel.WARNING)
         else:
             # 获取title
             item_title = info_data['title']
@@ -154,7 +155,7 @@ class BiliVideos(FilesBasic):
     # 转换合并函数
     def _transform(self, v, a, o):
         if not os.path.exists(v) or not os.path.exists(a):
-            self.send_message(f"Error: 视频文件「{v}」或音频文件「{a}」不存在，无法进行转换")
+            self.send_message(f"视频文件「{v}」或音频文件「{a}」不存在，无法进行转换", level=MessageLevel.ERROR)
             return False
 
         try:
@@ -166,11 +167,11 @@ class BiliVideos(FilesBasic):
                 outputs={o: '-vcodec copy -acodec copy -y -loglevel warning -threads 0'},
                 global_options='-hide_banner'
             )
-            print(f"执行转换命令：{ff.cmd}")
+            self.send_message(f"执行转换命令：{ff.cmd}", level=MessageLevel.INFO)
             ff.run()
             return True
         except Exception as e:
-            self.send_message(f"Error: 音视频合并时发生错误: {str(e)}")
+            self.send_message(f"音视频合并时发生错误: {str(e)}", level=MessageLevel.ERROR)
             return False
 
     # 获取m4s文件名
@@ -179,10 +180,10 @@ class BiliVideos(FilesBasic):
                  and not f.startswith(self.out_dir_prefix)]
 
         if len(files) < 2:
-            self.send_message(f"Error: m4s获取文件失败「{path}」")
+            self.send_message(f"m4s获取文件失败「{path}」", level=MessageLevel.ERROR)
             return None
         elif len(files) > 2:
-            self.send_message(f"Error: 存在多于2个m4s文件「{path}」")
+            self.send_message(f"存在多于2个m4s文件「{path}」", level=MessageLevel.ERROR)
             return None
 
         if files[0].endswith('-1-30280.m4s'):   # audio文件后缀 '-1-30280.m4s'
@@ -200,23 +201,25 @@ class BiliVideos(FilesBasic):
             files[0], files[1] = files[1], files[0]
             return files
         else:
-            self.send_message(f"Error: 未找到符合条件的音频文件「{path}」")
+            self.send_message(f"未找到符合条件的音频文件「{path}」", level=MessageLevel.ERROR)
             return None
 
     # =====================处理(bilibili缓存文件夹)函数======================
     def _data_dir_handler(self, _data_dir: str):
         outfolder_name = self.out_dir_prefix + _data_dir
-        os.makedirs(outfolder_name, exist_ok=True)
+        abs_data_dir = self._resolve_work_path(_data_dir)
+        abs_outfolder_path = self._resolve_work_path(outfolder_name)
+        os.makedirs(abs_outfolder_path, exist_ok=True)
 
-        paths = os.listdir(_data_dir)
+        paths = os.listdir(abs_data_dir)
         # 删除无关文件，仅保留视频所在文件夹
-        folders = [p for p in paths if os.path.isdir(os.path.join(_data_dir, p))]
+        folders = [p for p in paths if os.path.isdir(os.path.join(abs_data_dir, p))]
 
         if not folders:
-            self.send_message(f"Error: No video folders found in {_data_dir}")
+            self.send_message(f"No video folders found in {_data_dir}", level=MessageLevel.ERROR)
             return
 
-        self.send_message(f"找到{len(folders)}个视频文件夹，开始处理")
+        self.send_message(f"找到{len(folders)}个视频文件夹，开始处理", level=MessageLevel.INFO)
 
         # 计算合适的线程数 - 视频处理比较消耗I/O和CPU，调整线程数
         max_works = min(min(self.max_threads, 6), os.cpu_count(), len(folders))
@@ -224,7 +227,6 @@ class BiliVideos(FilesBasic):
             futures = []
             for folder in folders:
                 abs_input_path = os.path.join(self._work_folder, _data_dir, folder)
-                abs_outfolder_path = os.path.join(self._work_folder, outfolder_name)
                 futures.append(executor.submit(self.single_video_handler, abs_input_path, abs_outfolder_path))
 
             # 等待所有任务完成并处理结果
@@ -232,9 +234,9 @@ class BiliVideos(FilesBasic):
                 try:
                     future.result()  # 获取任务结果
                 except Exception as e:
-                    self.send_message(f"Error: 视频处理失败: {str(e)}")
+                    self.send_message(f"视频处理失败: {str(e)}", level=MessageLevel.ERROR)
 
-        self.send_message(f"所有视频处理完成，输出目录：{outfolder_name}")
+        self.send_message(f"所有视频处理完成，输出目录：{outfolder_name}", level=MessageLevel.SUCCESS)
 
     # ========处理单个文件文件夹内的视频和音频，生成一个可播放的视频========
     def single_video_handler(self, abs_input_path: str, abs_outfolder_path: str):
@@ -246,7 +248,7 @@ class BiliVideos(FilesBasic):
     # ================处理一对视频&音频，生成一个可播放的视频================
     def _one_video_handler(self, abs_input_path: str, abs_outfolder_path: str, names):
         if len(names) != 2:
-            self.send_message("Error: 配对音视频文件个数不对")
+            self.send_message("配对音视频文件个数不对", level=MessageLevel.ERROR)
             return
 
         # 获取视频名称
@@ -256,19 +258,19 @@ class BiliVideos(FilesBasic):
             # 如果 _get_title 返回 None，使用 names[1] 去掉后缀作为备用名称
             title = os.path.splitext(names[1])[0]
         else:
-            print(f"视频名称解析成功: {title}")
+            self.send_message(f"视频名称解析成功: {title}", level=MessageLevel.INFO)
         out_video = os.path.join(abs_outfolder_path, title + '.mp4')
 
         # 检查输出文件是否已经存在
         if os.path.exists(out_video):
-            self.send_message(f"注意: 输出文件「{out_video}」已存在，将被覆盖")
+            self.send_message(f"输出文件「{out_video}」已存在，将被覆盖", level=MessageLevel.WARNING)
 
         # 修复视频和音频文件
         self.__fix_m4s(abs_input_path, names[1])    # 改视频文件
-        self.send_message(f"正在处理视频文件：{names[1]}")
+        self.send_message(f"正在处理视频文件：{names[1]}", level=MessageLevel.INFO)
 
         self.__fix_m4s(abs_input_path, names[0])    # 改音频文件
-        self.send_message(f"正在处理音频文件：{names[0]}")
+        self.send_message(f"正在处理音频文件：{names[0]}", level=MessageLevel.INFO)
 
         # 名字要与__fix_m4s函数中out_file一致
         video = f"{abs_input_path}/{self.out_dir_prefix}{names[1]}"
@@ -277,9 +279,9 @@ class BiliVideos(FilesBasic):
         # 合成音视频
         SUCCESS = self._transform(video, audio, out_video)
         if SUCCESS is True:
-            self.send_message(f"SUCCESS: 「{title}」")
+            self.send_message(f"「{title}」", level=MessageLevel.SUCCESS)
         else:
-            self.send_message(f"Error: 「{title}」音视频合并失败")
+            self.send_message(f"「{title}」音视频合并失败", level=MessageLevel.ERROR)
 
 
 # =====================main(单独执行时使用)=====================

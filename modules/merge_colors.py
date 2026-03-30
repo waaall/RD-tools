@@ -71,25 +71,27 @@ class MergeColors(FilesBasic):
         if not pairs:
             self.send_message(f"Error: No images in {_data_dir}")
             return
-        os.makedirs(self.out_dir_prefix + _data_dir, exist_ok=True)
+        outfolder_name = self.out_dir_prefix + _data_dir
+        abs_outfolder_path = self._resolve_work_path(outfolder_name)
+        os.makedirs(abs_outfolder_path, exist_ok=True)
 
         # 多线程处理每一对图片
         max_works = min(self.max_threads, os.cpu_count(), len(pairs))
         with ThreadPoolExecutor(max_workers=max_works) as executor:
             for images_pair in pairs:
-                executor.submit(self.image_merge, _data_dir, images_pair)
+                executor.submit(self.image_merge, _data_dir, abs_outfolder_path, images_pair)
 
     # ======================合并图像并保存=======================
-    def image_merge(self, _data_dir: str, images_pair):
+    def image_merge(self, _data_dir: str, abs_outfolder_path: str, images_pair):
         output_name = images_pair[0].split('-', 1)[1]
-        output_path = os.path.join(self.out_dir_prefix + _data_dir, output_name)
+        output_path = os.path.join(abs_outfolder_path, output_name)
 
         channel_map = {}        # 初始化通道字典,按RGB分别存储
         expected_size = None    # 用于存储期望的图像尺寸
 
         # 遍历 images_pair
         for index, img_name in enumerate(images_pair):
-            path = os.path.join(_data_dir, img_name)
+            path = self._resolve_work_path(os.path.join(_data_dir, img_name))
             try:
                 img = Image.open(path).convert('RGB')  # 尝试打开图像并转换为 RGB
             except Exception as e:

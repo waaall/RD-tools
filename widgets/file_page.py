@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -23,15 +23,17 @@ from qfluentwidgets import (
     IndeterminateProgressRing,
     LineEdit,
     ListWidget,
-    PlainTextEdit,
     PrimaryPushButton,
     PushButton,
     SegmentedWidget,
     StrongBodyLabel,
     SubtitleLabel,
+    TextEdit,
     TitleLabel,
+    isDarkTheme,
 )
 
+from core import MessageLevel, TaskMessage, ensure_task_message
 from ui.task_descriptor import TaskDescriptor
 
 
@@ -45,7 +47,7 @@ class FileWindow(QWidget):
         self._work_folder_items: list[str] = []
         self._task_descriptors: dict[str, TaskDescriptor] = {}
         self._task_callbacks: dict[str, Callable[[], None]] = {}
-        self._operation_logs: dict[str, list[str]] = {}
+        self._operation_logs: dict[str, list[TaskMessage]] = {}
         self._task_states: dict[str, str] = {}
         self._task_items: dict[str, QListWidgetItem] = {}
         self._running_tasks: set[str] = set()
@@ -235,7 +237,7 @@ class FileWindow(QWidget):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        self.log_view = PlainTextEdit(self.log_page)
+        self.log_view = TextEdit(self.log_page)
         self.log_view.setObjectName('TaskLogView')
         self.log_view.setReadOnly(True)
         self.log_view.setPlaceholderText('这里会显示当前任务的独立日志。')
@@ -286,8 +288,7 @@ class FileWindow(QWidget):
             self.running_ring.stop()
         self.run_button.setEnabled(not is_running)
 
-        self.log_view.setPlainText('\n'.join(self._operation_logs.get(descriptor.key, [])))
-        self.log_view.moveCursor(QTextCursor.End)
+        self._render_log_messages(self._operation_logs.get(descriptor.key, []))
 
     def _switch_detail_page(self, page: QWidget):
         self.segment_stack.setCurrentWidget(page)
@@ -307,14 +308,14 @@ class FileWindow(QWidget):
             return None
         return self._task_descriptors.get(self._current_task_key)
 
-    def append_operation_log(self, task_key: str, message: str):
+    def append_operation_log(self, task_key: str, message: TaskMessage | str):
+        resolved_message = ensure_task_message(message)
         if task_key not in self._operation_logs:
             self._operation_logs[task_key] = []
 
-        self._operation_logs[task_key].append(message)
+        self._operation_logs[task_key].append(resolved_message)
         if task_key == self._current_task_key:
-            self.log_view.appendPlainText(message)
-            self.log_view.moveCursor(QTextCursor.End)
+            self._append_log_message_to_view(resolved_message)
 
     def clear_operation_log(self, task_key: str | None):
         if not task_key:
@@ -326,9 +327,9 @@ class FileWindow(QWidget):
 
     def log_operation_start(self, task_key: str, work_folder: str, wanted_items: list[str]):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.append_operation_log(task_key, f'[{timestamp}] 开始执行')
-        self.append_operation_log(task_key, f'工作目录: {work_folder}')
-        self.append_operation_log(task_key, f"目标目录: {', '.join(wanted_items)}")
+        self.append_operation_log(task_key, TaskMessage.build(f'[{timestamp}] 开始执行'))
+        self.append_operation_log(task_key, TaskMessage.build(f'工作目录: {work_folder}'))
+        self.append_operation_log(task_key, TaskMessage.build(f"目标目录: {', '.join(wanted_items)}"))
 
     def get_selected_directories(self):
         selected_dirs = []
@@ -471,6 +472,48 @@ class FileWindow(QWidget):
         style.unpolish(self.selection_status_label)
         style.polish(self.selection_status_label)
         self.selection_status_label.update()
+
+    def refresh_log_view(self):
+        if not self._current_task_key:
+            return
+        self._render_log_messages(self._operation_logs.get(self._current_task_key, []))
+
+    def _render_log_messages(self, messages: list[TaskMessage]):
+        self.log_view.clear()
+        for message in messages:
+            self._append_log_message_to_view(message)
+
+    def _append_log_message_to_view(self, message: TaskMessage):
+        cursor = self.log_view.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertText(message.text, self._log_char_format(message.level))
+        cursor.insertBlock()
+        self.log_view.setTextCursor(cursor)
+        self.log_view.ensureCursorVisible()
+
+    def _log_char_format(self, level: MessageLevel) -> QTextCharFormat:
+        char_format = QTextCharFormat()
+        color_map = self._log_color_map()
+        color = color_map.get(level)
+        if color is not None:
+            char_format.setForeground(color)
+        return char_format
+
+    def _log_color_map(self) -> dict[MessageLevel, QColor | None]:
+        if isDarkTheme():
+            return {
+                MessageLevel.INFO: None,
+                MessageLevel.SUCCESS: QColor('#4ade80'),
+                MessageLevel.WARNING: QColor('#fbbf24'),
+                MessageLevel.ERROR: QColor('#f87171'),
+            }
+
+        return {
+            MessageLevel.INFO: None,
+            MessageLevel.SUCCESS: QColor('#15803d'),
+            MessageLevel.WARNING: QColor('#b45309'),
+            MessageLevel.ERROR: QColor('#dc2626'),
+        }
 
 
 # ===========================调试用==============================
