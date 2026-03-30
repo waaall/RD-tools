@@ -159,3 +159,39 @@ QWidget#comboListWidget {
     background: rgba(255, 255, 255, 0.98);
     color: #1f2937;
 }
+
+QLabel#TaskConfirmTitle {
+    color: #1f2937;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QLabel#TaskConfirmHint {
+    color: #5f6b7a;
+    font-size: 13px;
+}
+
+QLabel#TaskConfirmSectionTitle {
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QPlainTextEdit#TaskConfirmSettingsView,
+QListWidget#TaskConfirmDirList {
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    border-radius: 10px;
+    background: rgba(248, 250, 252, 0.98);
+    color: #1f2937;
+    padding: 8px;
+}
+
+QListWidget#TaskConfirmDirList::item {
+    min-height: 30px;
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+
+QListWidget#TaskConfirmDirList::item:hover {
+    background: rgba(15, 23, 42, 0.04);
+}

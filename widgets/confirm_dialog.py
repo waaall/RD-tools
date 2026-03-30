@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QListWidget, QDialog, QHBoxLayout, QPlainTextEdit, QVBoxLayout
-from qfluentwidgets import BodyLabel, PrimaryPushButton, PushButton, SubtitleLabel
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QDialog
+from qfluentwidgets import BodyLabel, ListWidget, MessageBoxBase, PlainTextEdit, SubtitleLabel
 
 
-class TaskExecutionConfirmDialog(QDialog):
+class TaskExecutionConfirmDialog(MessageBoxBase):
     def __init__(
         self,
         task_title: str,
@@ -12,53 +12,53 @@ class TaskExecutionConfirmDialog(QDialog):
         settings_lines: list[str] | None = None,
         parent=None,
     ):
-        super().__init__(parent)
-        self.setWindowTitle("执行确认")
-        self.resize(620, 520)
+        dialog_parent = parent or QApplication.activeWindow()
+        if dialog_parent is None:
+            raise RuntimeError('TaskExecutionConfirmDialog requires a parent window.')
+
+        super().__init__(parent=dialog_parent)
+
+        self.yesButton.setText('确认执行')
+        self.cancelButton.setText('取消')
+
         self._build_ui(task_title, selected_dirs, settings_lines or [])
 
     def _build_ui(self, task_title: str, selected_dirs: list[str], settings_lines: list[str]):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        title = SubtitleLabel(f'执行任务: {task_title}', self.widget)
+        title.setObjectName('TaskConfirmTitle')
+        self.viewLayout.addWidget(title)
 
-        title = SubtitleLabel(f"执行任务: {task_title}", self)
-        layout.addWidget(title)
-
-        hint = BodyLabel("确认当前设置和目标目录后开始执行。", self)
+        hint = BodyLabel('确认当前设置和目标目录后开始执行。', self.widget)
+        hint.setObjectName('TaskConfirmHint')
         hint.setWordWrap(True)
-        layout.addWidget(hint)
+        self.viewLayout.addWidget(hint)
 
         if settings_lines:
-            settings_title = SubtitleLabel("当前设置", self)
-            layout.addWidget(settings_title)
+            settings_title = BodyLabel('当前设置', self.widget)
+            settings_title.setObjectName('TaskConfirmSectionTitle')
+            self.viewLayout.addWidget(settings_title)
 
-            settings_view = QPlainTextEdit(self)
+            settings_view = PlainTextEdit(self.widget)
+            settings_view.setObjectName('TaskConfirmSettingsView')
             settings_view.setReadOnly(True)
-            settings_view.setPlainText("\n".join(settings_lines))
-            settings_view.setMinimumHeight(180)
-            layout.addWidget(settings_view)
+            settings_view.setPlainText('\n'.join(settings_lines))
+            settings_view.setFixedHeight(180)
+            self.viewLayout.addWidget(settings_view)
 
-        dirs_title = SubtitleLabel("勾选文件夹列表", self)
-        layout.addWidget(dirs_title)
+        dirs_title = BodyLabel('勾选文件夹列表', self.widget)
+        dirs_title.setObjectName('TaskConfirmSectionTitle')
+        self.viewLayout.addWidget(dirs_title)
 
-        dir_list = QListWidget(self)
+        dir_list = ListWidget(self.widget)
+        dir_list.setObjectName('TaskConfirmDirList')
+        dir_list.setSelectionMode(QAbstractItemView.NoSelection)
         dir_list.addItems(selected_dirs)
-        dir_list.setMinimumHeight(200)
-        layout.addWidget(dir_list, stretch=1)
+        dir_list.setFixedHeight(220)
+        self.viewLayout.addWidget(dir_list)
 
-        button_layout = QHBoxLayout()
-        button_layout.addStretch(1)
-
-        cancel_button = PushButton("取消", self)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_button)
-
-        confirm_button = PrimaryPushButton("确认执行", self)
-        confirm_button.clicked.connect(self.accept)
-        button_layout.addWidget(confirm_button)
-
-        layout.addLayout(button_layout)
+        self.widget.setFixedWidth(680)
+        self.widget.layout().activate()
+        self.widget.setFixedHeight(self.widget.sizeHint().height())
 
     @classmethod
     def confirm(
