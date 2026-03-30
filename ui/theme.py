@@ -38,9 +38,29 @@ TOKENS = AppThemeTokens()
 
 
 def resolve_theme(theme_name: str | None) -> Theme:
-    if (theme_name or '').strip().lower() == 'light':
+    normalized_name = (theme_name or '').strip().lower()
+    if normalized_name == 'light':
         return Theme.LIGHT
+    if normalized_name == 'auto':
+        return Theme.AUTO
     return Theme.DARK
+
+
+def get_effective_theme(theme: Theme = Theme.AUTO) -> Theme:
+    return qconfig.theme if theme == Theme.AUTO else theme
+
+
+def load_app_stylesheet(app: QApplication | None = None, theme: Theme = Theme.AUTO) -> Theme:
+    qt_app = app or QApplication.instance()
+    if qt_app is None:
+        raise RuntimeError('QApplication must exist before loading the app stylesheet.')
+
+    effective_theme = get_effective_theme(theme)
+    qss_path = AppStyleSheet.APP.path(effective_theme)
+    with open(qss_path, 'r', encoding='utf-8') as f:
+        qt_app.setStyleSheet(f.read())
+
+    return effective_theme
 
 
 def apply_app_theme(theme_name: str | None, app: QApplication | None = None) -> Theme:
@@ -51,9 +71,4 @@ def apply_app_theme(theme_name: str | None, app: QApplication | None = None) -> 
     theme = resolve_theme(theme_name)
     setTheme(theme)
     setThemeColor(QColor(APP_THEME_COLOR))
-
-    qss_path = AppStyleSheet.APP.path(theme)
-    with open(qss_path, 'r', encoding='utf-8') as f:
-        qt_app.setStyleSheet(f.read())
-
-    return theme
+    return load_app_stylesheet(qt_app, theme)

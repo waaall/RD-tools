@@ -1,25 +1,39 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QApplication, QFrame, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLineEdit,
+    QListWidgetItem,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
+    CardWidget,
     ComboBox,
+    FluentIcon as FIF,
     LineEdit,
+    ListWidget,
     ScrollArea,
+    SegmentedWidget,
     SettingCard,
     SettingCardGroup,
-    StrongBodyLabel,
+    SubtitleLabel,
     SwitchSettingCard,
     TitleLabel,
-    FluentIcon as FIF,
 )
 
 from modules.app_settings import AppSettings
+from ui.task_descriptor import TaskDescriptor
 
 
 class AppLineEditSettingCard(SettingCard):
@@ -67,6 +81,104 @@ class AppComboBoxSettingCard(SettingCard):
         self.combo_box.setCurrentText(str(value))
 
 
+@dataclass(frozen=True, slots=True)
+class SettingsNavItem:
+    key: str
+    title: str
+    icon: Any
+
+
+class SettingsSplitView(QWidget):
+    selection_changed = Signal(str)
+
+    def __init__(self, title: str, hint: str, parent=None):
+        super().__init__(parent)
+        self._build_ui(title, hint)
+
+    def _build_ui(self, title: str, hint: str):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        self.sidebar_card = CardWidget(self)
+        self.sidebar_card.setObjectName('SettingsSidebarCard')
+        self.sidebar_card.setMinimumWidth(280)
+        self.sidebar_card.setMaximumWidth(340)
+        sidebar_layout = QVBoxLayout(self.sidebar_card)
+        sidebar_layout.setContentsMargins(16, 16, 16, 16)
+        sidebar_layout.setSpacing(12)
+
+        sidebar_title = SubtitleLabel(title, self.sidebar_card)
+        sidebar_layout.addWidget(sidebar_title)
+
+        sidebar_hint = CaptionLabel(hint, self.sidebar_card)
+        sidebar_hint.setObjectName('SectionHint')
+        sidebar_hint.setWordWrap(True)
+        sidebar_layout.addWidget(sidebar_hint)
+
+        self.nav_list = ListWidget(self.sidebar_card)
+        self.nav_list.setObjectName('SettingsNavList')
+        self.nav_list.currentItemChanged.connect(self._emit_selection)
+        sidebar_layout.addWidget(self.nav_list, stretch=1)
+        layout.addWidget(self.sidebar_card)
+
+        self.detail_card = CardWidget(self)
+        self.detail_card.setObjectName('SettingsDetailCard')
+        detail_layout = QVBoxLayout(self.detail_card)
+        detail_layout.setContentsMargins(16, 16, 16, 16)
+        detail_layout.setSpacing(0)
+
+        self.detail_scroll = ScrollArea(self.detail_card)
+        self.detail_scroll.setWidgetResizable(True)
+        self.detail_scroll.setFrameShape(QFrame.NoFrame)
+        detail_layout.addWidget(self.detail_scroll, stretch=1)
+
+        self.detail_container = QWidget(self.detail_scroll)
+        self.detail_container.setObjectName('AppPage')
+        self.detail_scroll.setWidget(self.detail_container)
+
+        self.detail_container_layout = QVBoxLayout(self.detail_container)
+        self.detail_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.detail_container_layout.setSpacing(16)
+        layout.addWidget(self.detail_card, stretch=1)
+
+    def set_nav_items(self, items: list[SettingsNavItem]):
+        self.nav_list.clear()
+        for item_data in items:
+            item = QListWidgetItem(item_data.title)
+            icon = item_data.icon.qicon() if hasattr(item_data.icon, 'qicon') else item_data.icon
+            item.setIcon(icon)
+            item.setData(Qt.UserRole, item_data.key)
+            self.nav_list.addItem(item)
+
+    def ensure_selection(self):
+        if self.nav_list.currentItem() is None and self.nav_list.count() > 0:
+            self.nav_list.setCurrentRow(0)
+
+    def clear_detail(self):
+        while self.detail_container_layout.count():
+            item = self.detail_container_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def show_empty_state(self, title: str, description: str):
+        self.clear_detail()
+        title_label = SubtitleLabel(title, self.detail_container)
+        self.detail_container_layout.addWidget(title_label)
+
+        description_label = BodyLabel(description, self.detail_container)
+        description_label.setObjectName('PageDescription')
+        description_label.setWordWrap(True)
+        self.detail_container_layout.addWidget(description_label)
+        self.detail_container_layout.addStretch(1)
+
+    def _emit_selection(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None):
+        if not current:
+            return
+        self.selection_changed.emit(current.data(Qt.UserRole))
+
+
 class SettingWindow(QWidget):
     notification_requested = Signal(str, str, str)
     theme_changed = Signal(str)
@@ -78,13 +190,21 @@ class SettingWindow(QWidget):
         'Batch_Files': FIF.DOCUMENT,
     }
 
-    def __init__(self, settings: AppSettings):
+    GENERAL_CATEGORIES = ('General', 'Network', 'Display')
+
+    def __init__(self, settings: AppSettings, task_descriptors: list[TaskDescriptor] | None = None):
         super().__init__()
         self.settings = settings
+        self.task_descriptors = task_descriptors or []
         self.main_categories = self.settings.get_main_categories() or []
+        self.general_categories = [name for name in self.main_categories if name in self.GENERAL_CATEGORIES]
+        self._task_descriptor_map = {descriptor.key: descriptor for descriptor in self.task_descriptors}
+        self._configured_task_groups = set(self.settings.get_setting_groups('Batch_Files'))
 
         self.setObjectName('AppPage')
         self._build_ui()
+        self._populate_navigation()
+        self._switch_panel(self.general_view, 'general')
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
@@ -99,54 +219,116 @@ class SettingWindow(QWidget):
         title.setObjectName('PageTitle')
         main_layout.addWidget(title)
 
-        description = BodyLabel('设置项变更即时写回配置文件。此页只重做表现层，不改变现有配置结构和信号链路。', self)
+        description = BodyLabel('设置项变更即时写回配置文件。通用设置与任务设置共享同一套侧栏 + 详情布局，不改变现有配置结构和信号链路。', self)
         description.setObjectName('PageDescription')
         description.setWordWrap(True)
         main_layout.addWidget(description)
 
-        self.scroll_area = ScrollArea(self)
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.NoFrame)
-        main_layout.addWidget(self.scroll_area, stretch=1)
+        self.segmented_widget = SegmentedWidget(self)
+        self.segmented_widget.setObjectName('SegmentHost')
+        self.segmented_widget.addItem('general', '通用设置', lambda: self._switch_panel(self.general_view, 'general'))
+        self.segmented_widget.addItem('tasks', '任务设置', lambda: self._switch_panel(self.task_view, 'tasks'))
+        main_layout.addWidget(self.segmented_widget, 0, Qt.AlignLeft)
 
-        container = QWidget(self.scroll_area)
-        container.setObjectName('AppPage')
-        self.scroll_area.setWidget(container)
+        self.panel_stack = QStackedWidget(self)
+        self.general_view = SettingsSplitView('通用设置', 'General、Network、Display 按当前分类单独呈现。', self)
+        self.task_view = SettingsSplitView('任务设置', '只显示存在独立设置项的任务，顺序、标题和图标与任务页保持一致。', self)
+        self.panel_stack.addWidget(self.general_view)
+        self.panel_stack.addWidget(self.task_view)
+        main_layout.addWidget(self.panel_stack, stretch=1)
 
-        container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(16)
+        self.general_view.selection_changed.connect(self._render_general_category)
+        self.task_view.selection_changed.connect(self._render_task_settings)
 
-        for category_name in self.main_categories:
-            group = SettingCardGroup(self._humanize(category_name), container)
-            setting_map = self.settings.get_setting_map(category_name)
-            for name, options_and_path in setting_map.items():
-                options, path = self.settings._extract_options_path(options_and_path)
-                value = getattr(self.settings, name, None)
-                subgroup = ' / '.join(self._humanize(part) for part in path[1:-1]) or None
-                title = self._humanize(path[-1])
-                icon = self.CATEGORY_ICONS.get(category_name, FIF.SETTING)
-                card = self._build_setting_card(name, value, options, title, subgroup, icon)
+    def _populate_navigation(self):
+        general_items = [
+            SettingsNavItem(key=category_name, title=category_name, icon=self.CATEGORY_ICONS.get(category_name, FIF.SETTING))
+            for category_name in self.general_categories
+        ]
+        self.general_view.set_nav_items(general_items)
+
+        task_items = []
+        for descriptor in self.task_descriptors:
+            if descriptor.operation_cls.__name__ not in self._configured_task_groups:
+                continue
+            task_items.append(SettingsNavItem(key=descriptor.key, title=descriptor.title, icon=descriptor.icon))
+        self.task_view.set_nav_items(task_items)
+
+    def _switch_panel(self, view: SettingsSplitView, key: str):
+        self.panel_stack.setCurrentWidget(view)
+        self.segmented_widget.setCurrentItem(key)
+        if view.nav_list.count() == 0:
+            if view is self.task_view:
+                view.show_empty_state('暂无任务设置', '当前没有可映射到 Batch_Files 的任务配置。')
+            else:
+                view.show_empty_state('暂无通用设置', '当前未找到可显示的通用设置分类。')
+            return
+        view.ensure_selection()
+
+    def _render_general_category(self, category_name: str):
+        entries = self.settings.get_setting_entries(category_name)
+        grouped_entries = self._group_entries(entries, start_index=1, default_group_title=category_name)
+        icon = self.CATEGORY_ICONS.get(category_name, FIF.SETTING)
+        self._render_grouped_entries(self.general_view, grouped_entries, icon)
+
+    def _render_task_settings(self, task_key: str):
+        descriptor = self._task_descriptor_map.get(task_key)
+        if descriptor is None:
+            self.task_view.show_empty_state('任务不存在', '未找到当前任务的元数据。')
+            return
+
+        entries = self.settings.get_setting_entries('Batch_Files', group_name=descriptor.operation_cls.__name__)
+        grouped_entries = self._group_entries(entries, start_index=2, default_group_title=descriptor.title)
+        self._render_grouped_entries(self.task_view, grouped_entries, descriptor.icon)
+
+    def _render_grouped_entries(self, view: SettingsSplitView, grouped_entries: list[tuple[str, list[dict[str, Any]]]], icon):
+        view.clear_detail()
+        if not grouped_entries:
+            view.show_empty_state('暂无设置项', '当前选择下没有可展示的设置项。')
+            return
+
+        for group_title, entries in grouped_entries:
+            group = SettingCardGroup(group_title, view.detail_container)
+            for entry in entries:
+                title = self._humanize(entry['path'][-1])
+                card = self._build_setting_card(
+                    name=entry['name'],
+                    value=entry['value'],
+                    options=entry['options'],
+                    title=title,
+                    content=None,
+                    icon=icon,
+                    parent=view.detail_container,
+                )
                 group.addSettingCard(card)
-            container_layout.addWidget(group)
+            view.detail_container_layout.addWidget(group)
 
-        container_layout.addStretch(1)
+        view.detail_container_layout.addStretch(1)
 
-    def _build_setting_card(self, name: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon):
+    def _group_entries(self, entries: list[dict[str, Any]], start_index: int, default_group_title: str):
+        grouped_entries: dict[str, list[dict[str, Any]]] = {}
+        default_title = self._humanize(default_group_title)
+        for entry in entries:
+            path = entry['path']
+            group_title = ' / '.join(self._humanize(part) for part in path[start_index:-1]) or default_title
+            grouped_entries.setdefault(group_title, []).append(entry)
+        return list(grouped_entries.items())
+
+    def _build_setting_card(self, name: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon, parent=None):
         if options is not None:
             if options and all(isinstance(option, bool) for option in options):
-                card = SwitchSettingCard(icon, title, content, parent=self)
+                card = SwitchSettingCard(icon, title, content, parent=parent or self)
                 card.setChecked(bool(value))
                 card.checkedChanged.connect(lambda checked, setting_name=name: self.update_setting(setting_name, checked))
                 return card
 
-            card = AppComboBoxSettingCard(icon, title, content, options=options, value=value, parent=self)
+            card = AppComboBoxSettingCard(icon, title, content, options=options, value=value, parent=parent or self)
             card.valueChanged.connect(lambda selected, setting_name=name: self.update_setting(setting_name, selected))
             return card
 
         is_password = 'api_key' in name.lower()
         text_value = '' if value is None else str(value)
-        card = AppLineEditSettingCard(icon, title, content, value=text_value, is_password=is_password, parent=self)
+        card = AppLineEditSettingCard(icon, title, content, value=text_value, is_password=is_password, parent=parent or self)
         card.valueChanged.connect(lambda text, setting_name=name: self.update_setting(setting_name, text))
         return card
 

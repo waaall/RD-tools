@@ -248,7 +248,7 @@ class FileWindow(QWidget):
         self._task_states.setdefault(descriptor.key, '待执行')
 
         item = QListWidgetItem(descriptor.title)
-        item.setIcon(descriptor.icon.icon())
+        item.setIcon(descriptor.icon.qicon())
         item.setData(Qt.UserRole, descriptor.key)
         self.task_list.addItem(item)
         self._task_items[descriptor.key] = item

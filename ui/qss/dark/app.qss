@@ -59,7 +59,26 @@ QFrame#TaskListCard {
     border-radius: 10px;
 }
 
+QFrame#SettingsSidebarCard {
+    background: rgba(38, 40, 44, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+}
+
+QFrame#SettingsDetailCard {
+    background: rgba(44, 47, 51, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+}
+
 QListWidget#TaskList {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 4px;
+}
+
+QListWidget#SettingsNavList {
     background: transparent;
     border: none;
     outline: none;
@@ -74,12 +93,29 @@ QListWidget#TaskList::item {
     color: #f5f7fa;
 }
 
+QListWidget#SettingsNavList::item {
+    min-height: 42px;
+    padding: 10px 12px;
+    margin: 4px 0;
+    border-radius: 8px;
+    color: #f5f7fa;
+}
+
 QListWidget#TaskList::item:selected {
     background: rgba(47, 111, 237, 0.18);
     border: 1px solid rgba(47, 111, 237, 0.36);
 }
 
+QListWidget#SettingsNavList::item:selected {
+    background: rgba(47, 111, 237, 0.18);
+    border: 1px solid rgba(47, 111, 237, 0.36);
+}
+
 QListWidget#TaskList::item:hover:!selected {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+QListWidget#SettingsNavList::item:hover:!selected {
     background: rgba(255, 255, 255, 0.05);
 }
 
@@ -111,4 +147,15 @@ QTextBrowser#HelpBrowser {
 
 QWidget#SegmentHost {
     background: transparent;
+}
+
+QFrame#SettingsDetailCard LineEdit,
+QFrame#SettingsDetailCard ComboBox {
+    background: rgba(255, 255, 255, 0.04);
+    color: #f5f7fa;
+}
+
+QWidget#comboListWidget {
+    background: rgba(44, 47, 51, 0.98);
+    color: #f5f7fa;
 }

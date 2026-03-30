@@ -182,12 +182,13 @@ def main():
     app = QApplication(sys.argv)
     settings = AppSettings()
     settings.load_settings()
+    task_descriptors = build_task_descriptors()
     apply_app_theme(settings.theme, app)
 
-    window = MainWindow(settings)
+    window = MainWindow(settings, task_descriptors)
     bindings: list[BatchFilesBinding] = []
 
-    for descriptor in build_task_descriptors():
+    for descriptor in task_descriptors:
         register_batch_operation(window, bindings, descriptor)
 
     window.show()

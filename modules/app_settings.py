@@ -52,7 +52,7 @@ class AppSettings(QObject):
             "resolution": (["1920x1080", "1280x720", "800x600"],
                            "Display", "Apparence", "resolution"),
             "fullscreen": ("Display", "Apparence", "fullscreen"),
-            "theme": (["Light", "Dark"], "Display", "Apparence", "theme"),
+            "theme": (["Light", "Dark", "Auto"], "Display", "Apparence", "theme"),
             "motion_on": ("Display", "Motion", "motion_on")
         }
         self.Batch_Files_Settingmap = {
@@ -201,6 +201,41 @@ class AppSettings(QObject):
     def get_main_categories(self):
         return self.__main_categories
 
+    def get_setting_entries(self, category_name: str, group_name: str | None = None):
+        entries = []
+        setting_map = self.get_setting_map(category_name)
+        for name, options_path in setting_map.items():
+            options, path = self._extract_options_path(options_path)
+            if group_name is not None and (len(path) < 2 or path[1] != group_name):
+                continue
+
+            value = getattr(self, name, self.get_value_from_path(path))
+            entries.append({
+                'name': name,
+                'options': options,
+                'path': path,
+                'value': value,
+            })
+
+        return entries
+
+    def get_setting_groups(self, category_name: str):
+        groups = []
+        seen = set()
+        for entry in self.get_setting_entries(category_name):
+            path = entry['path']
+            if len(path) < 2:
+                continue
+
+            group_name = path[1]
+            if group_name in seen:
+                continue
+
+            seen.add(group_name)
+            groups.append(group_name)
+
+        return groups
+
     def get_value_from_path(self, path):
         d = self.__settings_json
         for key in path:
@@ -271,6 +306,7 @@ class AppSettings(QObject):
     # 保存设置到文件
     def save_settings(self, name: str, value):
         # 查找设置对应的路径
+        path = None
         for category in self.__main_categories:
             setting_map = self.get_setting_map(category)
             options_path = setting_map.get(name)
@@ -292,7 +328,7 @@ class AppSettings(QObject):
         # 发送信号(类名,参数名和值), 通知设置修改
         self.changed_signal.emit(path[-2], path[-1], value)
         try:
-            with open(self.settings_file, 'w') as file:
+            with open(self.settings_file, 'w', encoding='utf-8') as file:
                 json.dump(self.__settings_json, file, indent=4)
                 return True
         except Exception as e:
