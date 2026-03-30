@@ -146,6 +146,9 @@ class SettingsSplitView(QWidget):
         self.detail_container = QWidget(self.detail_scroll)
         self.detail_container.setObjectName('AppPage')
         self.detail_scroll.setWidget(self.detail_container)
+        self.detail_scroll.setStyleSheet('QScrollArea { background: transparent; border: none; }')
+        self.detail_scroll.viewport().setAutoFillBackground(False)
+        self.detail_scroll.viewport().setStyleSheet('background: transparent;')
 
         self.detail_container_layout = QVBoxLayout(self.detail_container)
         self.detail_container_layout.setContentsMargins(0, 0, 0, 0)
