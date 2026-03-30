@@ -1,7 +1,10 @@
 {
     "General": {
         "language": "English",
-        "autosave": true
+        "Display": {
+            "theme": "Dark",
+            "launch_maximized": true
+        }
     },
     "Network": {
         "Serial": {
@@ -14,16 +17,6 @@
             "use_proxy": true,
             "proxy_address": "127.0.0.1",
             "proxy_port": "8080"
-        }
-    },
-    "Display": {
-        "Apparence": {
-            "theme": "Dark",
-            "resolution": "1280x720",
-            "fullscreen": true
-        },
-        "Motion": {
-            "motion_on": true
         }
     },
     "Batch_Files": {

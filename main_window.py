@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QCloseEvent, QCursor, QGuiApplication, QScreen
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import (
     FluentIcon as FIF,
@@ -19,14 +20,19 @@ from widgets.setting_page import SettingWindow
 
 
 class MainWindow(FluentWindow):
+    AUTO_WINDOW_WIDTH_RATIO = 0.9
+    AUTO_WINDOW_HEIGHT_RATIO = 0.9
+    BASE_MINIMUM_SIZE = QSize(1180, 720)
+    FALLBACK_WINDOW_SIZE = QSize(1320, 840)
+
     def __init__(self, settings: AppSettings, task_descriptors: list[TaskDescriptor] | None = None):
         super().__init__()
         self.settings = settings
         self._theme_listener = SystemThemeListener(self)
 
         self.setWindowTitle('RD-tools')
-        self.resize(1320, 840)
-        self.setMinimumSize(1180, 720)
+        self.resize(self.FALLBACK_WINDOW_SIZE)
+        self.setMinimumSize(self.BASE_MINIMUM_SIZE)
 
         self._init_interfaces(task_descriptors or [])
         self._connect_signals()
@@ -69,6 +75,40 @@ class MainWindow(FluentWindow):
         self.switchTo(self.SettingWindow)
         return self.SettingWindow.open_task_settings(task_key)
 
+    def show_for_launch(self):
+        self._apply_launch_geometry()
+        if bool(self.settings.launch_maximized):
+            self.showMaximized()
+            return
+        self.show()
+
+    def _apply_launch_geometry(self):
+        screen = self._get_launch_screen()
+        if screen is None:
+            self.resize(self.FALLBACK_WINDOW_SIZE)
+            return
+
+        available = screen.availableGeometry()
+        minimum_width = min(self.BASE_MINIMUM_SIZE.width(), available.width())
+        minimum_height = min(self.BASE_MINIMUM_SIZE.height(), available.height())
+        self.setMinimumSize(minimum_width, minimum_height)
+
+        width = min(
+            max(int(available.width() * self.AUTO_WINDOW_WIDTH_RATIO), minimum_width),
+            available.width(),
+        )
+        height = min(
+            max(int(available.height() * self.AUTO_WINDOW_HEIGHT_RATIO), minimum_height),
+            available.height(),
+        )
+        x = available.x() + max(0, (available.width() - width) // 2)
+        y = available.y() + max(0, (available.height() - height) // 2)
+        self.setGeometry(x, y, width, height)
+
+    @staticmethod
+    def _get_launch_screen() -> QScreen | None:
+        return QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+
     def closeEvent(self, event: QCloseEvent):
         if self._theme_listener.isRunning():
             self._theme_listener.requestInterruption()
@@ -84,5 +124,5 @@ if __name__ == '__main__':
     settings = AppSettings()
     apply_app_theme(settings.theme, app)
     trial = MainWindow(settings)
-    trial.show()
+    trial.show_for_launch()
     sys.exit(app.exec())

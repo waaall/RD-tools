@@ -37,7 +37,8 @@ class AppSettings(QObject):
         """
         self.General_Settingmap = {
             "language": (["English", "French", "Spanish"], "General", "language"),
-            "autosave": ("General", "autosave")
+            "launch_maximized": ([True, False], "General", "Display", "launch_maximized"),
+            "theme": (["Light", "Dark", "Auto"], "General", "Display", "theme"),
         }
         self.Network_Settingmap = {
             "serial_baud_rate": ([800, 1200, 2400, 4800, 9600, 14400, 19200, 38400],
@@ -48,13 +49,6 @@ class AppSettings(QObject):
             "use_proxy": ("Network", "Internet", "use_proxy"),
             "proxy_address": ("Network", "Internet", "proxy_address"),
             "proxy_port": ("Network", "Internet", "proxy_port")
-        }
-        self.Display_Settingmap = {
-            "resolution": (["1920x1080", "1280x720", "800x600"],
-                           "Display", "Apparence", "resolution"),
-            "fullscreen": ("Display", "Apparence", "fullscreen"),
-            "theme": (["Light", "Dark", "Auto"], "Display", "Apparence", "theme"),
-            "motion_on": ("Display", "Motion", "motion_on")
         }
         self.Batch_Files_Settingmap = {
             "dicom_log_folder_name": ("Batch_Files", "DicomToImage", "log_folder_name"),
@@ -282,6 +276,15 @@ class AppSettings(QObject):
             d = d[key]
         return d
 
+    def _write_settings_file(self):
+        try:
+            with open(self.settings_file, 'w', encoding='utf-8') as file:
+                json.dump(self.__settings_json, file, indent=4)
+                return True
+        except Exception as e:
+            print(f"From AppSettings:\n\t写入配置文件失败: {e}\n")
+            return False
+
     # 根据类名获取参数
     def get_class_params(self, class_name):
         """
@@ -347,10 +350,4 @@ class AppSettings(QObject):
 
         # 发送信号(类名,参数名和值), 通知设置修改
         self.changed_signal.emit(path[-2], path[-1], value)
-        try:
-            with open(self.settings_file, 'w', encoding='utf-8') as file:
-                json.dump(self.__settings_json, file, indent=4)
-                return True
-        except Exception as e:
-            print(f"From AppSettings:\n\tError to save {name}-{value}: {e}\n")
-            return False
+        return self._write_settings_file()

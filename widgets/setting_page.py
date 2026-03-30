@@ -199,11 +199,10 @@ class SettingWindow(QWidget):
     CATEGORY_ICONS = {
         'General': FIF.SETTING,
         'Network': FIF.IOT,
-        'Display': FIF.APPLICATION,
         'Batch_Files': FIF.DOCUMENT,
     }
 
-    GENERAL_CATEGORIES = ('General', 'Network', 'Display')
+    GENERAL_CATEGORIES = ('General', 'Network')
 
     def __init__(self, settings: AppSettings, task_descriptors: list[TaskDescriptor] | None = None):
         super().__init__()
@@ -244,7 +243,7 @@ class SettingWindow(QWidget):
         main_layout.addWidget(self.segmented_widget, 0, Qt.AlignLeft)
 
         self.panel_stack = QStackedWidget(self)
-        self.general_view = SettingsSplitView('通用设置', 'General、Network、Display 按当前分类单独呈现。', self)
+        self.general_view = SettingsSplitView('通用设置', 'General 与 Network 按分类呈现，Display 已并入 General 作为子分组。', self)
         self.task_view = SettingsSplitView('任务设置', '只显示存在独立设置项的任务，顺序、标题和图标与任务页保持一致。', self)
         self.panel_stack.addWidget(self.general_view)
         self.panel_stack.addWidget(self.task_view)

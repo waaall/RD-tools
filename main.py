@@ -243,7 +243,7 @@ def main():
     for descriptor in task_descriptors:
         register_batch_operation(window, bindings, descriptor)
 
-    window.show()
+    window.show_for_launch()
     sys.exit(app.exec())
 
 
