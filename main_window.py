@@ -65,6 +65,10 @@ class MainWindow(FluentWindow):
         apply_app_theme(self.settings.theme, QApplication.instance())
         self.FileWindow.refresh_log_view()
 
+    def open_task_settings(self, task_key: str) -> bool:
+        self.switchTo(self.SettingWindow)
+        return self.SettingWindow.open_task_settings(task_key)
+
     def closeEvent(self, event: QCloseEvent):
         if self._theme_listener.isRunning():
             self._theme_listener.requestInterruption()

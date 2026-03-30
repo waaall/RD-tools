@@ -29,6 +29,7 @@ class AppSettings(QObject):
 
     def __init__(self):
         super().__init__()
+        self._default_settings_json = {}
         """
             1. 定义「设置项变量名称」到设置路径的映射, 附加选项在value第一项(如果有)
             2. **_Settingmap 命名要与 json key 和 value 的 path[0] 一致
@@ -92,6 +93,21 @@ class AppSettings(QObject):
                                      "Batch_Files", "ECGHandler", "time_range_short"),
             "ecg_time_range_medium": ([10.0, 15.0, 20.0, 30.0],
                                       "Batch_Files", "ECGHandler", "time_range_medium"),
+            "rename_log_folder_name": ("Batch_Files", "FilesRenamer", "log_folder_name"),
+            "rename_mode": (
+                ["prefix", "all", "body", "between"],
+                "Batch_Files",
+                "FilesRenamer",
+                "mode",
+            ),
+            "rename_pattern": ("Batch_Files", "FilesRenamer", "pattern"),
+            "rename_start_pattern": ("Batch_Files", "FilesRenamer", "start_pattern"),
+            "rename_end_pattern": ("Batch_Files", "FilesRenamer", "end_pattern"),
+            "rename_replace_with": ("Batch_Files", "FilesRenamer", "replace_with"),
+            "rename_include_extension": ([True, False], "Batch_Files", "FilesRenamer", "include_extension"),
+            "rename_case_sensitive": ([True, False], "Batch_Files", "FilesRenamer", "case_sensitive"),
+            "rename_recursive": ([True, False], "Batch_Files", "FilesRenamer", "recursive"),
+            "rename_max_threads": ([1, 2, 4, 8], "Batch_Files", "FilesRenamer", "max_threads"),
         }
         # 在初始化时加载设置
         self.__settings_json = None
@@ -146,6 +162,8 @@ class AppSettings(QObject):
 
         # 打开文件加载json数据
         try:
+            with open(default_settings_file, 'r', encoding='utf-8') as file:
+                self._default_settings_json = json.load(file)
             with open(self.settings_file, 'r') as file:
                 self.__settings_json = json.load(file)
         except Exception as e:
@@ -154,8 +172,10 @@ class AppSettings(QObject):
             if self.settings_file != default_settings_file:
                 print("From AppSettings:\n\t尝试加载默认配置文件\n")
                 self.settings_file = default_settings_file
-                with open(self.settings_file, 'r') as file:
+                with open(self.settings_file, 'r', encoding='utf-8') as file:
                     self.__settings_json = json.load(file)
+                if not self._default_settings_json:
+                    self._default_settings_json = self.__settings_json
 
         # 提取第一级键作为main_categories
         self.__main_categories = list(self.__settings_json.keys())
@@ -224,9 +244,9 @@ class AppSettings(QObject):
         return groups
 
     def get_value_from_path(self, path):
-        d = self.__settings_json
-        for key in path:
-            d = d.get(key, {})
+        d = self._lookup_path(self.__settings_json, path)
+        if d is None:
+            d = self._lookup_path(self._default_settings_json, path)
 
         # 确保返回正确的数据类型
         if d is None:
@@ -251,6 +271,15 @@ class AppSettings(QObject):
             except (ValueError, AttributeError):
                 pass
 
+        return d
+
+    @staticmethod
+    def _lookup_path(source: dict | None, path):
+        d = source
+        for key in path:
+            if not isinstance(d, dict) or key not in d:
+                return None
+            d = d[key]
         return d
 
     # 根据类名获取参数
@@ -280,6 +309,8 @@ class AppSettings(QObject):
                     # 获取参数名和值
                     param_name = path[-1]
                     param_value = self.get_value_from_path(path)
+                    if param_value is None:
+                        continue
                     params[param_name] = param_value
         return params
 
@@ -304,7 +335,9 @@ class AppSettings(QObject):
             # 获取最后一级之前的dict对象
             d = self.__settings_json
             for key in path[:-1]:
-                d = d.get(key, {})
+                if key not in d or not isinstance(d[key], dict):
+                    d[key] = {}
+                d = d[key]
             # 设置最后一级的值
             d[path[-1]] = value
             print(f"From AppSettings:\n\tUpdating setting: {path} = {value}\n")

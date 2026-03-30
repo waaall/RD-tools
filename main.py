@@ -11,6 +11,7 @@ from modules.app_settings import AppSettings
 from modules.bili_videos import BiliVideos
 from modules.dicom_to_imgs import DicomToImage
 from modules.ECG_handler import ECGHandler
+from modules.files_renamer import FilesRenamer
 from modules.gen_subtitles import GenSubtitles
 from modules.mac_poop_scooper import MacPoopScooper
 from modules.merge_colors import MergeColors
@@ -18,6 +19,8 @@ from modules.split_colors import SplitColors
 from modules.twist_shape import TwistImgs
 from core import MessageLevel, TaskMessage
 from ui import TaskDescriptor, apply_app_theme
+from widgets.confirm_dialog import TaskExecutionConfirmDialog
+from widgets.setting_page import humanize_setting_label
 
 
 class BatchFilesBinding(QThread):
@@ -25,7 +28,7 @@ class BatchFilesBinding(QThread):
     running_changed = Signal(str, bool)
     completed = Signal(str, bool, str)
 
-    def __init__(self, handler_object, descriptor: TaskDescriptor, file_window):
+    def __init__(self, handler_object, descriptor: TaskDescriptor, file_window, settings: AppSettings):
         super().__init__()
         self.work_folder = ''
         self.wanted_items: list[str] = []
@@ -33,6 +36,7 @@ class BatchFilesBinding(QThread):
         self.display_name = descriptor.title
         self.handler_object = handler_object
         self.file_window = file_window
+        self.settings = settings
         self._run_error: str | None = None
 
         self.handler_object.result_signal.connect(self._forward_result, Qt.QueuedConnection)
@@ -69,6 +73,22 @@ class BatchFilesBinding(QThread):
         finally:
             self.handler_object.close_log_session()
 
+    @staticmethod
+    def _format_setting_value(value):
+        if isinstance(value, bool):
+            return 'True' if value else 'False'
+        return str(value)
+
+    def _build_task_setting_lines(self) -> list[str]:
+        entries = self.settings.get_setting_entries(
+            'Batch_Files',
+            group_name=self.handler_object.__class__.__name__,
+        )
+        return [
+            f"{humanize_setting_label(entry['path'][-1])}: {self._format_setting_value(entry['value'])}"
+            for entry in entries
+        ]
+
     def handler_binding(self):
         if self.isRunning():
             self.file_window.append_operation_log(
@@ -98,6 +118,18 @@ class BatchFilesBinding(QThread):
             self.file_window.notify_blocking_issue(message)
             return
 
+        if not TaskExecutionConfirmDialog.confirm(
+            task_title=self.display_name,
+            selected_dirs=wanted_items,
+            settings_lines=self._build_task_setting_lines(),
+            parent=self.file_window,
+        ):
+            self.file_window.append_operation_log(
+                self.task_key,
+                TaskMessage.build('未执行：已取消执行确认。', level=MessageLevel.INFO),
+            )
+            return
+
         self.work_folder = work_folder
         self.wanted_items = wanted_items
         self.file_window.set_selection_status(f'已准备执行，当前勾选了 {len(wanted_items)} 个目录。')
@@ -109,14 +141,20 @@ class BatchFilesBinding(QThread):
 def register_batch_operation(window: MainWindow, bindings: list[BatchFilesBinding], descriptor: TaskDescriptor):
     params = window.settings.get_class_params(descriptor.operation_cls.__name__)
     for key, value in descriptor.default_params.items():
-        params.setdefault(key, value)
+        if params.get(key) in (None, {}):
+            params[key] = value
 
     operation_object = descriptor.operation_cls(**params)
-    binding = BatchFilesBinding(operation_object, descriptor, window.FileWindow)
+    binding = BatchFilesBinding(operation_object, descriptor, window.FileWindow, window.settings)
     binding.result_signal.connect(window.FileWindow.append_operation_log, Qt.QueuedConnection)
     binding.running_changed.connect(window.FileWindow.set_task_running, Qt.QueuedConnection)
     binding.completed.connect(window.FileWindow.finish_task, Qt.QueuedConnection)
-    window.FileWindow.register_task(descriptor, binding.handler_binding)
+    window.FileWindow.register_task(
+        descriptor,
+        binding.handler_binding,
+        has_settings=window.SettingWindow.has_task_settings(descriptor.key),
+        open_settings_callback=lambda task_key=descriptor.key: window.open_task_settings(task_key),
+    )
     window.settings.changed_signal.connect(binding.update_setting)
     bindings.append(binding)
 
@@ -174,6 +212,13 @@ def build_task_descriptors() -> list[TaskDescriptor]:
             description='对音视频文件批量抽取音频并生成 SRT 字幕。',
             icon=FIF.DOCUMENT,
             operation_cls=GenSubtitles,
+        ),
+        TaskDescriptor(
+            key='files-renamer',
+            title='批量重命名',
+            description='按 prefix / all / body / between 规则批量重命名文件。',
+            icon=FIF.EDIT,
+            operation_cls=FilesRenamer,
         ),
         TaskDescriptor(
             key='mac-cleaner',

@@ -159,3 +159,19 @@ QWidget#comboListWidget {
     background: rgba(44, 47, 51, 0.98);
     color: #f5f7fa;
 }
+
+QPushButton#TaskSettingsButton[availability="enabled"] {
+    background: #2aa676;
+    color: #f5f7fa;
+    border: 1px solid #21835b;
+}
+
+QPushButton#TaskSettingsButton[availability="enabled"]:hover {
+    background: #239064;
+}
+
+QPushButton#TaskSettingsButton[availability="disabled"] {
+    background: #4b5563;
+    color: #9ca3af;
+    border: 1px solid #5b6470;
+}

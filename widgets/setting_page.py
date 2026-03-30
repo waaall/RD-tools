@@ -36,6 +36,16 @@ from modules.app_settings import AppSettings
 from ui.task_descriptor import TaskDescriptor
 
 
+def humanize_setting_label(value: str) -> str:
+    parts = value.replace('-', '_').split('_')
+    words = []
+    for part in parts:
+        if not part:
+            continue
+        words.append(part if part.isupper() else part.capitalize())
+    return ' '.join(words)
+
+
 class AppLineEditSettingCard(SettingCard):
     valueChanged = Signal(str)
 
@@ -314,6 +324,26 @@ class SettingWindow(QWidget):
             grouped_entries.setdefault(group_title, []).append(entry)
         return list(grouped_entries.items())
 
+    def has_task_settings(self, task_key: str) -> bool:
+        descriptor = self._task_descriptor_map.get(task_key)
+        if descriptor is None:
+            return False
+        return descriptor.operation_cls.__name__ in self._configured_task_groups
+
+    def open_task_settings(self, task_key: str) -> bool:
+        if not self.has_task_settings(task_key):
+            return False
+
+        self._switch_panel(self.task_view, 'tasks')
+        for index in range(self.task_view.nav_list.count()):
+            item = self.task_view.nav_list.item(index)
+            if item.data(Qt.UserRole) != task_key:
+                continue
+            self.task_view.nav_list.setCurrentRow(index)
+            return True
+
+        return False
+
     def _build_setting_card(self, name: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon, parent=None):
         if options is not None:
             if options and all(isinstance(option, bool) for option in options):
@@ -347,13 +377,7 @@ class SettingWindow(QWidget):
 
     @staticmethod
     def _humanize(value: str) -> str:
-        parts = value.replace('-', '_').split('_')
-        words = []
-        for part in parts:
-            if not part:
-                continue
-            words.append(part if part.isupper() else part.capitalize())
-        return ' '.join(words)
+        return humanize_setting_label(value)
 
 
 if __name__ == '__main__':

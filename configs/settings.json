@@ -62,6 +62,18 @@
             "trim_percentage": 6.0,
             "time_range_short": 3.0,
             "time_range_medium": 10.0
+        },
+        "FilesRenamer": {
+            "log_folder_name": "files_renamer_log",
+            "mode": "prefix",
+            "pattern": "-",
+            "start_pattern": "",
+            "end_pattern": "",
+            "replace_with": "",
+            "include_extension": false,
+            "case_sensitive": false,
+            "recursive": false,
+            "max_threads": 4
         }
     }
 }

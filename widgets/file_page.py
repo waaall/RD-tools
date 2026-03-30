@@ -47,9 +47,11 @@ class FileWindow(QWidget):
         self._work_folder_items: list[str] = []
         self._task_descriptors: dict[str, TaskDescriptor] = {}
         self._task_callbacks: dict[str, Callable[[], None]] = {}
+        self._task_settings_callbacks: dict[str, Callable[[], None]] = {}
         self._operation_logs: dict[str, list[TaskMessage]] = {}
         self._task_states: dict[str, str] = {}
         self._task_items: dict[str, QListWidgetItem] = {}
+        self._task_has_settings: dict[str, bool] = {}
         self._running_tasks: set[str] = set()
         self._current_task_key = ''
 
@@ -133,6 +135,12 @@ class FileWindow(QWidget):
         self.task_state_label.setObjectName('TaskStateLabel')
         status_layout.addWidget(self.task_state_label, 0, Qt.AlignVCenter)
         status_layout.addStretch(1)
+
+        self.edit_settings_button = PushButton(self.overview_card)
+        self.edit_settings_button.setObjectName('TaskSettingsButton')
+        self.edit_settings_button.setText('修改设置')
+        self.edit_settings_button.clicked.connect(self._open_current_task_settings)
+        status_layout.addWidget(self.edit_settings_button)
 
         self.run_button = PrimaryPushButton(self.overview_card)
         self.run_button.setText('执行任务')
@@ -243,9 +251,18 @@ class FileWindow(QWidget):
         self.log_view.setPlaceholderText('这里会显示当前任务的独立日志。')
         layout.addWidget(self.log_view, stretch=1)
 
-    def register_task(self, descriptor: TaskDescriptor, run_callback: Callable[[], None]):
+    def register_task(
+        self,
+        descriptor: TaskDescriptor,
+        run_callback: Callable[[], None],
+        has_settings: bool = False,
+        open_settings_callback: Callable[[], None] | None = None,
+    ):
         self._task_descriptors[descriptor.key] = descriptor
         self._task_callbacks[descriptor.key] = run_callback
+        self._task_has_settings[descriptor.key] = has_settings
+        if open_settings_callback is not None:
+            self._task_settings_callbacks[descriptor.key] = open_settings_callback
         self._operation_logs.setdefault(descriptor.key, [])
         self._task_states.setdefault(descriptor.key, '待执行')
 
@@ -274,6 +291,7 @@ class FileWindow(QWidget):
             self.running_ring.stop()
             self.running_ring.hide()
             self.run_button.setEnabled(False)
+            self.edit_settings_button.setEnabled(False)
             self.log_view.clear()
             return
 
@@ -287,6 +305,7 @@ class FileWindow(QWidget):
         else:
             self.running_ring.stop()
         self.run_button.setEnabled(not is_running)
+        self._update_settings_button_state(descriptor.key)
 
         self._render_log_messages(self._operation_logs.get(descriptor.key, []))
 
@@ -302,6 +321,15 @@ class FileWindow(QWidget):
 
     def _clear_current_log(self):
         self.clear_operation_log(self._current_task_key)
+
+    def _open_current_task_settings(self):
+        if not self._current_task_key:
+            return
+        if not self._task_has_settings.get(self._current_task_key, False):
+            return
+        callback = self._task_settings_callbacks.get(self._current_task_key)
+        if callback is not None:
+            callback()
 
     def current_task_descriptor(self) -> TaskDescriptor | None:
         if not self._current_task_key:
@@ -472,6 +500,18 @@ class FileWindow(QWidget):
         style.unpolish(self.selection_status_label)
         style.polish(self.selection_status_label)
         self.selection_status_label.update()
+
+    def _update_settings_button_state(self, task_key: str):
+        has_settings = self._task_has_settings.get(task_key, False)
+        self.edit_settings_button.setEnabled(True)
+        self.edit_settings_button.setProperty('availability', 'enabled' if has_settings else 'disabled')
+        self.edit_settings_button.setToolTip(
+            '打开当前任务的设置项。' if has_settings else '当前任务没有可修改的设置选项。'
+        )
+        style = self.edit_settings_button.style()
+        style.unpolish(self.edit_settings_button)
+        style.polish(self.edit_settings_button)
+        self.edit_settings_button.update()
 
     def refresh_log_view(self):
         if not self._current_task_key:
