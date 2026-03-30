@@ -45,8 +45,6 @@ this-project/
 │   ├── split_colors.py
 │   └── twist_shape.py
 │   ├── dicom_to_imgs.py
-│   └── serial_com.py
-│   └── serial_plot.py
 │   └── bili_videos.py
 │   └── ECG_handler.py
 │   └── gen_subtitles.py
@@ -59,8 +57,6 @@ this-project/
 │   ├── setting_page.py
 │   ├── file_page.py
 │   ├── help_page.py
-│   ├── plotting_page.py
-│   └── images_page.py
 │
 ├── main_window.py
 ├── main.py

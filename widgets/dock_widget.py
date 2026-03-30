@@ -16,9 +16,8 @@ class DockPage(QWidget):
         super().__init__()
         main_layout = QVBoxLayout(self)
 
-        # 初始化各个「页面按钮」组
         self.group_names = []
-        initial_group_names = group_names or ['settings_help', 'image_opt', 'file_opt']
+        initial_group_names = group_names or ['帮助与设置', '批量处理']
         for name in initial_group_names:
             self.__add_group(name)
 

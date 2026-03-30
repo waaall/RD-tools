@@ -1,207 +1,221 @@
 import os
-import re
 import sys
 
 from PySide6.QtGui import *
-# # QPixmap, QIcon, QImage
 from PySide6.QtCore import *
-# QFile, QFileInfo, QPoint, QSettings, QSaveFile, Qt, QTimeLine, Signal
 from PySide6.QtWidgets import *
-# QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QLineEdit, QWidget
 
 
 # =========================================================
 # =======                文件操作界面               =========
 # =========================================================
 class FileWindow(QWidget):
-    selected_signal = Signal(str, list)
-
     def __init__(self):
         super().__init__()
 
-        # 初始化文件名，之后的函数会改
-        self.__work_folder = os.getcwd()
-        self.__work_folder_items = []
-        self.__wanted_indexs = []
+        self._work_folder = ""
+        self._work_folder_items = []
+        self._operation_logs = {}
 
-        # 一个窗口的最小尺寸,分别代表左半和右半的最小宽度 & 上半和下半的最小高度
-        self.window_minimum_size = [200, 300, 200, 200]
-        mainLayout = QVBoxLayout()
+        self.window_minimum_size = [260, 320, 220, 220]
+        main_layout = QVBoxLayout()
+
         self.__init_workfolder_group()
-        mainLayout.addWidget(self.workfolder_group)
+        main_layout.addWidget(self.workfolder_group, stretch=2)
 
-        self.__init_file_option_group()
-        mainLayout.addWidget(self.file_option_group)
+        self.__init_task_group()
+        main_layout.addWidget(self.task_group, stretch=3)
+
         self.setWindowTitle("文件窗口")
-
-        # 设置总的布局
-        self.setLayout(mainLayout)
+        self.setLayout(main_layout)
 
     def __init_workfolder_group(self):
-        self.workfolder_group = QGroupBox("一:begin", self)
-        group_layout = QHBoxLayout()
+        self.workfolder_group = QGroupBox("一: 选择输入目录", self)
+        group_layout = QVBoxLayout()
 
-        # 选择文件等操作的layout (group_layout:左select_layout右)
-        select_layout = QVBoxLayout()
+        path_layout = QHBoxLayout()
+        choose_folder_button = QPushButton("选择工作目录", self)
+        choose_folder_button.clicked.connect(self.__get_work_folder)
+        path_layout.addWidget(choose_folder_button)
 
-        chooseFolderBut = QPushButton("1.选择工作目录", self)
-        select_layout.addWidget(chooseFolderBut)
-        chooseFolderBut.clicked.connect(self.__get_work_folder)
+        self.work_folder_display = QLineEdit(self)
+        self.work_folder_display.setPlaceholderText("请选择需要批处理的根目录")
+        self.work_folder_display.setReadOnly(True)
+        path_layout.addWidget(self.work_folder_display, stretch=1)
+        group_layout.addLayout(path_layout)
 
-        hint_lable1 = QLabel('2.请选择想要处理的序号:', self)
-        hint_lable1.setMinimumWidth(self.window_minimum_size[0])
-        select_layout.addWidget(hint_lable1)
+        helper_label = QLabel("勾选当前工作目录下需要处理的一级子目录。每个任务会复用这份选择。", self)
+        helper_label.setWordWrap(True)
+        group_layout.addWidget(helper_label)
 
-        self.__user_index = QLineEdit(self)
-        self.__user_index.setMinimumWidth(self.window_minimum_size[0])
-        select_layout.addWidget(self.__user_index)
+        self.folder_list = QListWidget(self)
+        self.folder_list.setMinimumSize(self.window_minimum_size[0], self.window_minimum_size[2])
+        self.folder_list.itemChanged.connect(self._update_selection_summary)
+        group_layout.addWidget(self.folder_list)
 
-        self.get_select_file_but = QPushButton('3.提取选中序号', self)
-        self.get_select_file_but.setMinimumWidth(self.window_minimum_size[0])
-        self.get_select_file_but.clicked.connect(self.__get_work_folder_indexs)
-        select_layout.addWidget(self.get_select_file_but)
+        actions_layout = QHBoxLayout()
+        select_all_button = QPushButton("全选", self)
+        select_all_button.clicked.connect(self.select_all_directories)
+        actions_layout.addWidget(select_all_button)
 
-        # lable本用来显示执行结果，后决定传递变量由controler显示
-        self.select_index_result_label = QLabel(self)
-        select_layout.addWidget(self.select_index_result_label)
+        clear_button = QPushButton("清空选择", self)
+        clear_button.clicked.connect(self.clear_selected_directories)
+        actions_layout.addWidget(clear_button)
 
-        # layout层级嵌套, stretch=1表示select_layout占据小部分空间
-        group_layout.addLayout(select_layout, stretch=1)
+        actions_layout.addStretch(1)
 
-        self.__files_list_area = QPlainTextEdit(self)
-        self.__files_list_area.setMinimumSize(self.window_minimum_size[0],
-                                              self.window_minimum_size[2])
-        self.__files_list_area.setReadOnly(True)
-        group_layout.addWidget(self.__files_list_area, stretch=3)
+        self.selection_summary_label = QLabel("请选择工作目录", self)
+        actions_layout.addWidget(self.selection_summary_label)
+        group_layout.addLayout(actions_layout)
+
+        self.selection_status_label = QLabel("未选择工作目录", self)
+        self.selection_status_label.setWordWrap(True)
+        group_layout.addWidget(self.selection_status_label)
 
         self.workfolder_group.setLayout(group_layout)
 
-    # ===============创建文件的具体操作界面=================
-    def __init_file_option_group(self):
-        self.file_option_group = QGroupBox('二:文件操作', self)
-        file_option_layout = QHBoxLayout(self)
+    def __init_task_group(self):
+        self.task_group = QGroupBox("二: 任务卡片", self)
+        group_layout = QVBoxLayout()
 
-        # 创建侧边栏
-        self.sidebar = QListWidget()
-        # 尽量不用setFixedWidth,用stretch和setMinimumWidth
-        self.sidebar.setMinimumSize(self.window_minimum_size[0],
-                                    self.window_minimum_size[2])
-        self.sidebar.setStyleSheet("QListWidget { font-size: 16px; }")
-        self.sidebar.currentItemChanged.connect(self._switch_file_option)
+        helper_label = QLabel("每张卡片都会使用上面勾选的目录范围，并把日志保留在自己的卡片里。", self)
+        helper_label.setWordWrap(True)
+        group_layout.addWidget(helper_label)
 
-        # 创建显示内容的区域
-        self.file_options_stack = QStackedWidget()
-        # self.file_options_stack.setSizePolicy(self.sizePolicy())
+        scroll_area = QScrollArea(self)
+        scroll_area.setWidgetResizable(True)
 
-        # 添加侧边栏和显示区域
-        file_option_layout.addWidget(self.sidebar, stretch=1)
-        file_option_layout.addWidget(self.file_options_stack, stretch=3)
-        self.file_option_group.setLayout(file_option_layout)
+        self.task_cards_container = QWidget(self)
+        self.task_cards_layout = QVBoxLayout(self.task_cards_container)
+        self.task_cards_layout.setAlignment(Qt.AlignTop)
+        scroll_area.setWidget(self.task_cards_container)
 
-    def _switch_file_option(self, current, previous):
-        if not current:
-            return
-        # 获取选中项目的索引，并切换到对应的页面
-        index = self.sidebar.currentRow()
-        self.file_options_stack.setCurrentIndex(index)
+        group_layout.addWidget(scroll_area)
+        self.task_group.setLayout(group_layout)
 
-        # 清空当前页面的 QPlainTextEdit
-        for widget in self.file_options_stack.currentWidget().findChildren(QPlainTextEdit):
-            widget.clear()
+    def add_file_operation(self, name, description, slot_func):
+        card = QFrame(self.task_cards_container)
+        card.setFrameShape(QFrame.StyledPanel)
+        card_layout = QVBoxLayout(card)
 
-    def add_file_operation(self, name, slot_func):
-        """
-        添加一个新的文件操作项，包括一个按钮和一个结果显示区域。
-        :param name: 操作的名称，在侧边栏显示。
-        :param slot_func: 按钮点击时执行的槽函数。
-        """
-        # 创建新页面
-        file_options_page = QWidget()
-        file_options_layout = QVBoxLayout(file_options_page)
+        title_label = QLabel(name, card)
+        title_font = title_label.font()
+        title_font.setBold(True)
+        title_font.setPointSize(title_font.pointSize() + 1)
+        title_label.setFont(title_font)
+        card_layout.addWidget(title_label)
 
-        # 添加操作按钮
-        operation_button = QPushButton(name)
-        operation_button.clicked.connect(slot_func)
-        file_options_layout.addWidget(operation_button)
+        description_label = QLabel(description, card)
+        description_label.setWordWrap(True)
+        card_layout.addWidget(description_label)
 
-        # 添加执行结果显示区域
-        result_display = QPlainTextEdit()
-        result_display.setMinimumSize(self.window_minimum_size[0],
-                                      self.window_minimum_size[2])
+        button_layout = QHBoxLayout()
+        run_button = QPushButton("执行任务", card)
+        run_button.clicked.connect(slot_func)
+        button_layout.addWidget(run_button)
+
+        clear_log_button = QPushButton("清空日志", card)
+        clear_log_button.clicked.connect(lambda: self.clear_operation_log(name))
+        button_layout.addWidget(clear_log_button)
+        button_layout.addStretch(1)
+        card_layout.addLayout(button_layout)
+
+        result_display = QPlainTextEdit(card)
+        result_display.setMinimumHeight(140)
         result_display.setReadOnly(True)
-        file_options_layout.addWidget(result_display)
+        result_display.setPlaceholderText("这里会显示该任务的独立日志。")
+        card_layout.addWidget(result_display)
 
-        # 添加页面到 QStackedWidget
-        self.file_options_stack.addWidget(file_options_page)
+        self._operation_logs[name] = result_display
+        self.task_cards_layout.addWidget(card)
 
-        # 在侧边栏添加操作项
-        item = QListWidgetItem(name)
-        self.sidebar.addItem(item)
-
-    def set_operation_result(self, message):
-        # 获取当前选中页面的 QPlainTextEdit
-        current_index = self.sidebar.currentRow()
-        if current_index == -1:
-            print("No operation selected.")
+    def append_operation_log(self, operation_name, message):
+        result_display = self._operation_logs.get(operation_name)
+        if result_display is None:
+            print(f"Unknown operation: {operation_name}")
             return
 
-        # 获取当前页面的 QPlainTextEdit 并显示消息
-        current_widget = self.file_options_stack.widget(current_index)
-        if current_widget:
-            result_display = current_widget.findChild(QPlainTextEdit)
-            if result_display:
-                result_display.appendPlainText(message)
-                try:
-                    result_display.moveCursor(QPlainTextEdit().textCursor().End)
-                except Exception:
-                    result_display.moveCursor(QTextCursor.End)
+        result_display.appendPlainText(message)
+        result_display.moveCursor(QTextCursor.End)
+
+    def clear_operation_log(self, operation_name):
+        result_display = self._operation_logs.get(operation_name)
+        if result_display is not None:
+            result_display.clear()
+
+    def log_operation_start(self, operation_name, work_folder, wanted_items):
+        timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+        self.append_operation_log(operation_name, f"[{timestamp}] 开始执行")
+        self.append_operation_log(operation_name, f"工作目录: {work_folder}")
+        self.append_operation_log(operation_name, f"目标目录: {', '.join(wanted_items)}")
+
+    def get_selected_directories(self):
+        selected_dirs = []
+        for index in range(self.folder_list.count()):
+            item = self.folder_list.item(index)
+            if item.checkState() == Qt.Checked:
+                selected_dirs.append(item.data(Qt.UserRole))
+        return self._work_folder, selected_dirs
+
+    def set_selection_status(self, message, is_error=False):
+        self.selection_status_label.setText(message)
+        color = "#b00020" if is_error else "#2e7d32"
+        self.selection_status_label.setStyleSheet(f"color: {color};")
+
+    def select_all_directories(self):
+        for index in range(self.folder_list.count()):
+            item = self.folder_list.item(index)
+            item.setCheckState(Qt.Checked)
+
+    def clear_selected_directories(self):
+        for index in range(self.folder_list.count()):
+            item = self.folder_list.item(index)
+            item.setCheckState(Qt.Unchecked)
+
+    def _update_selection_summary(self, _item=None):
+        total_count = self.folder_list.count()
+        if total_count == 0:
+            self.selection_summary_label.setText("当前目录下没有可选子目录")
+            return
+
+        selected_count = len(self.get_selected_directories()[1])
+        self.selection_summary_label.setText(f"已勾选 {selected_count} / {total_count} 个目录")
 
     def __get_work_folder(self):
-        self.__work_folder = QFileDialog.getExistingDirectory(self, "选择目录", "./")
+        start_dir = self._work_folder if self._work_folder else "./"
+        selected_folder = QFileDialog.getExistingDirectory(self, "选择目录", start_dir)
 
-        # 检查是否选择了有效的目录
-        if not self.__work_folder:
-            # 用户取消选择或者未选择有效目录，提示用户
+        if not selected_folder:
             print("From FileWindow:\n\tError: 未选择目录")
-            return  # 退出函数，避免后续错误
-
-        self.__work_folder_items = [f for f in os.listdir(self.__work_folder)
-                                    if not f.startswith('.')]
-
-        # 构建显示的字符串内容
-        content = "当前目录内文件为:\n\n"
-        for i, item in enumerate(self.__work_folder_items):
-            content += f"{i}: {item}\n"
-        self.__files_list_area.setPlainText(content)
-
-    def __get_work_folder_indexs(self):
-        # 将用户输入的索引字符串进行预处理
-        temp = re.sub(r"\s+|,|，", r" ", self.__user_index.text()).split()
-        wanted_items = []
-        try:
-            # 将字符串转换为整数列表
-            self.__wanted_indexs = list(map(int, temp))
-        except ValueError:
-            # 如果转换失败，说明输入中有非整数，显示错误消息
-            self.select_index_result_label.setText('输入包含非整数值')
             return
 
-        # 检查是否提取到了有效的索引
-        if not self.__wanted_indexs:
-            self.select_index_result_label.setText('没有提取到有效输入')
-            return
+        self._work_folder = selected_folder
+        self.work_folder_display.setText(self._work_folder)
+        self._load_work_folder_items()
 
-        # 检查索引是否在范围内
-        for index in self.__wanted_indexs:
-            if index < 0 or index >= len(self.__work_folder_items):
-                self.select_index_result_label.setText(f'给出序号 {index} 超出范围')
-                return
-            else:
-                wanted_items.append(self.__work_folder_items[index])
+    def _load_work_folder_items(self):
+        self.folder_list.clear()
+        self._work_folder_items = sorted(
+            [
+                item for item in os.listdir(self._work_folder)
+                if not item.startswith('.')
+                and os.path.isdir(os.path.join(self._work_folder, item))
+            ]
+        )
 
-        # 如果所有检查通过，显示成功消息并发出信号
-        self.select_index_result_label.setText('成功提取序号, 可以进行文件操作')
-        self.selected_signal.emit(self.__work_folder, wanted_items)
+        for item_name in self._work_folder_items:
+            item = QListWidgetItem(item_name)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            item.setData(Qt.UserRole, item_name)
+            self.folder_list.addItem(item)
+
+        self._update_selection_summary()
+
+        if self._work_folder_items:
+            self.set_selection_status(f"已加载 {len(self._work_folder_items)} 个可选目录。")
+        else:
+            self.set_selection_status("当前工作目录下没有可处理的一级子目录。", is_error=True)
 
 
 # ===========================调试用==============================

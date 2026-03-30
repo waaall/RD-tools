@@ -2,11 +2,8 @@ import sys
 from functools import partial
 
 from PySide6.QtGui import *
-# QPixmap, QPainter
 from PySide6.QtCore import *
-# QFile, QFileInfo, QPoint, QSettings, QSaveFile, Qt, QTimeLine
 from PySide6.QtWidgets import *
-# QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QTextEdit, QWidget
 
 from widgets import *
 
@@ -32,67 +29,53 @@ class MainWindow(QMainWindow):
 
     # 初始化Dock和主窗口(centralWidget)
     def __init_general_windows(self):
-        # 虽然我在DockPage提供了add_group, 但最好还是在这里初始化
-        page_groups_names = ['settings_help', 'image_opt', 'file_opt']
+        page_groups_names = ['帮助与设置', '批量处理']
 
-        # 初始化dock
         if hasattr(self, 'dock'):
-            return  # 如果存在, 直接返回, 不创建新的 dock
+            return
         self.dock = QDockWidget()
-        self.dock.setWindowTitle('工作目录')
+        self.dock.setWindowTitle('导航')
         self.dock_page = DockPage(page_groups_names)
         self.dock.setWidget(self.dock_page)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.dock)
 
         self.Stack = QStackedWidget()
 
-        # 初始化具体页面, 如果需要在外部访问你对象, 需要定义到self, 否则无需定义
-        # 第一个初始化的就是开始界面, 当然不仅仅这一两行代码, 还有一些前置的步骤, 具体见文档
         self.__help_window_name = 'HelpWindow'
-        self.add_stack_page(HelpWindow(), group_name=page_groups_names[0])
+        self.HelpWindow = HelpWindow()
+        self.add_stack_page(self.HelpWindow, group_name=page_groups_names[0], button_name='帮助')
 
         self.SettingWindow = SettingWindow()
-        self.add_stack_page(self.SettingWindow, group_name=page_groups_names[0])
-
-        self.PlottingWindow = PlottingWindow()
-        self.add_stack_page(self.PlottingWindow, group_name=page_groups_names[1])
+        self.add_stack_page(self.SettingWindow, group_name=page_groups_names[0], button_name='设置')
 
         self.FileWindow = FileWindow()
-        self.add_stack_page(self.FileWindow, group_name=page_groups_names[2])
+        self.add_stack_page(self.FileWindow, group_name=page_groups_names[1], button_name='任务')
 
-    # ====================右侧stack中添加一页=====================
-    def add_stack_page(self, page_instance, group_name: str = 'file_opt'):
+    def add_stack_page(self, page_instance, group_name: str = '批量处理', button_name: str = None):
         """
         :param page_instance: 页面的类示例, 当然, 需要import你的页面类所在的文件
         :param group_name: dock_page的组名
         """
-        # 确定stack子页面名称 = 对应的dock按钮名称
         page_name = page_instance.__class__.__name__
+        button_name = button_name or page_name
 
-        # 将页面添加到 QStackedWidget 中
         self.Stack.addWidget(page_instance)
         page_instance.setObjectName(page_name)
 
-        # 在指定的组中添加按钮并绑定切换页面的事件
-        self.dock_page.add_button(group_name, page_name,
+        self.dock_page.add_button(group_name, button_name,
                                   lambda: self.switch_stack_page(page_name))
 
-        # 如果有result_signal, 信号发送到 main window 的 status bar
         if hasattr(page_instance, 'result_signal'):
             page_instance.result_signal.connect(self.send_status_message)
 
-    # ===================显示左边Dock栏===================
     def show_dock(self):
-        # 检查是否已经有一个 'dock_window'
         if hasattr(self, 'dock'):
             self.dock.show()
-            self.statusBar().showMessage("dock重新打开")
-            return  # 如果存在，直接返回，不创建新的 dock
-        else:
-            self.statusBar().showMessage("初始化dock")
-            self.__init_dock()
+            self.statusBar().showMessage("导航已打开")
+            return
+        self.statusBar().showMessage("初始化导航")
+        self.__init_general_windows()
 
-    # =======================主界面的功能区=======================
     def send_status_message(self, message):
         self.statusBar().showMessage(message)
 
@@ -121,12 +104,13 @@ class MainWindow(QMainWindow):
         self.helpMenu.addAction(self.devHelpAct)
 
     def show_user_help(self):
-        QMessageBox.about(self, "hai", "This part is still under developed")
+        self.switch_stack_page(self.__help_window_name)
+        self.HelpWindow.show_user_manual()
 
     def show_dev_help(self):
-        QMessageBox.about(self, "hai", "This part is still under developed")
+        self.switch_stack_page(self.__help_window_name)
+        self.HelpWindow.show_develop_manual()
 
-    # ====================stack窗口的切换&动画====================
     def switch_stack_page(self, window_name):
         widget = self.Stack.findChild(QWidget, window_name)
         if widget:

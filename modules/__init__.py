@@ -38,6 +38,3 @@ from .mac_poop_scooper import MacPoopScooper
 
 # bilibili videos
 from .bili_videos import BiliVideos
-
-# serial_plot
-from .serial_plot import SerialPlot

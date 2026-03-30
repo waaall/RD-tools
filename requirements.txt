@@ -4,12 +4,10 @@ matplotlib
 scipy
 PySide6
 pillow
-pyserial
 pydicom
 PyWavelets
 neurokit2
 opencv-python
-pyqtgraph
 openai
 ollama
 PyMuPDF

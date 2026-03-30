@@ -10,11 +10,10 @@ Module Function: Converts medical imaging DICOM files into images or videos, sav
 
 #### UI Workflow
 Select the working directory, which should be the grandparent directory of the DICOMDIR file.
-Choose sequence numbers (parent directories of DICOMDIR files). Multiple selections (for multi-experiment scenarios) can be made with space-separated entries.
-Click "Extract Selected Sequences".
-Navigate to the DICOM Processing option in the left sidebar under File Operations.
-Click the "DICOM Processing" button at the bottom-right.
-Monitor the log below the button. A "SUCCESS! Log file saved." message indicates completion.
+Tick the target subdirectories in the checkbox list.
+Find the DICOM Processing task card in the File window.
+Click the "Execute Task" button on that card.
+Monitor the dedicated log in the same card. A "SUCCESS! log file saved." message indicates completion.
 
 #### CLI Workflow
 Run the dicom_to_imgs.py script (located in the modules folder) directly in the terminal. This mirrors the UI logic.
@@ -34,7 +33,7 @@ Advanced processing:
 Steps:
 Set the sampling rate (default: 1000 Hz) to match your data.
 Select the parent directory of the ECG data folder as the working directory.
-Choose the target folder(s) by sequence number.
+Tick the target subdirectories in the checkbox list and run the ECG task card.
 
 
 ### Bilibili Video Export
@@ -60,11 +59,6 @@ Functions:
 - SplitColors: Separates RGB channels of images (useful for fluorescence-labeled images).
 - MergeColors: Merges specified channels (e.g., R+G) from image pairs into composite images.
 
-
-### Com_Driver & SerialPlot
-Core: A serial communication base class (Com_Driver) and real-time plotting module (SerialPlot).
-Status: Development paused after discovering Serial Studio.
-Future Plan: Integrate with the ECG module to build a lightweight ECG visualization tool, if time permits.
 
 ### TwistImgs
 Function: Applies perspective distortion to images, creating quadrilateral visual effects (useful for custom poster designs or scene mockups).
