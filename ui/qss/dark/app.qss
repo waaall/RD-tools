@@ -1,0 +1,114 @@
+QWidget#AppPage {
+    background: transparent;
+}
+
+QLabel#PageEyebrow {
+    color: #86a6ff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+QLabel#PageTitle {
+    color: #f5f7fa;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+QLabel#PageDescription {
+    color: #b8c0cc;
+    font-size: 14px;
+}
+
+QLabel#SummaryLabel,
+QLabel#TaskStateLabel,
+QLabel#SelectionSummary,
+QLabel#SectionHint,
+QLabel#DocHint {
+    color: #b8c0cc;
+    font-size: 13px;
+}
+
+QLabel#SelectionStatus[state="neutral"] {
+    color: #b8c0cc;
+    font-size: 13px;
+}
+
+QLabel#SelectionStatus[state="success"] {
+    color: #2aa676;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#SelectionStatus[state="error"] {
+    color: #c55252;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QFrame#SurfaceCard {
+    background: rgba(44, 47, 51, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+}
+
+QFrame#TaskListCard {
+    background: rgba(38, 40, 44, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+}
+
+QListWidget#TaskList {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 4px;
+}
+
+QListWidget#TaskList::item {
+    min-height: 42px;
+    padding: 10px 12px;
+    margin: 4px 0;
+    border-radius: 8px;
+    color: #f5f7fa;
+}
+
+QListWidget#TaskList::item:selected {
+    background: rgba(47, 111, 237, 0.18);
+    border: 1px solid rgba(47, 111, 237, 0.36);
+}
+
+QListWidget#TaskList::item:hover:!selected {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+QListWidget#FolderList {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 4px;
+}
+
+QListWidget#FolderList::item {
+    min-height: 30px;
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+
+QListWidget#FolderList::item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+QPlainTextEdit#TaskLogView,
+QTextBrowser#HelpBrowser {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    color: #f5f7fa;
+    padding: 8px;
+}
+
+QWidget#SegmentHost {
+    background: transparent;
+}

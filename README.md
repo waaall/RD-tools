@@ -1,9 +1,8 @@
 # RD-tools
 
-this is a modular app that can handle some repetitive tasks in the R&amp;D process
+this is a modular app that can handle some repetitive tasks in the RD process
 
 ## Functions
-
 
 ### DICOM Processing
 Module Function: Converts medical imaging DICOM files into images or videos, saving them in folders mirroring the original DICOMDIR hierarchy.
@@ -98,7 +97,7 @@ NOTICE: if you change the code, maybe have errors when you running `git pull` co
 
 ## How to Use
 
- start this app by running the following command in terminal. 
+ start this app by running the following command in terminal.
 
 ```bash
 python main.py

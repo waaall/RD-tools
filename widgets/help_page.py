@@ -1,80 +1,93 @@
+from __future__ import annotations
+
 import os
 import sys
-from PySide6.QtGui import QFont
-# # QPixmap, QIcon, QImage
-from PySide6.QtCore import *
-# QFile, QFileInfo, QPoint, QSettings, QSaveFile, Qt, QTimeLine
-from PySide6.QtWidgets import *
-# QAction, QApplication, QFileDialog, QMainWindow, QMessageBox, QLineEdit, QWidget
+
+from PySide6.QtWidgets import QApplication, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget
+from qfluentwidgets import BodyLabel, CaptionLabel, CardWidget, SegmentedWidget, TitleLabel
 
 
-# =========================================================
-# =======                 帮助界面                 =========
-# =========================================================
 class HelpWindow(QWidget):
     def __init__(self):
         super().__init__()
 
-        # 主布局
-        mainLayout = QVBoxLayout(self)
-
-        # 顶部按钮组
-        buttonLayout = QHBoxLayout()
-        self.userBut = QPushButton("User Manual")
-        self.devBut = QPushButton("Develop Manual")
-        buttonLayout.addWidget(self.userBut)
-        buttonLayout.addWidget(self.devBut)
-
-        self._init_doc_browser()
-
-        # 将布局添加到主布局
-        mainLayout.addLayout(buttonLayout)
-        mainLayout.addWidget(self.textBrowser)
-
-        self.setGeometry(100, 100, 400, 600)
-
-    # =====创建文档查看窗口======
-    def _init_doc_browser(self):
-        # 显示文档的文本浏览器，支持 Markdown
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.doc_dir = os.path.join(base_dir, 'configs')
 
-        self.textBrowser = QTextBrowser()
-        self.textBrowser.setOpenExternalLinks(True)
-        self.textBrowser.setMinimumSize(350, 500)
+        self.setObjectName('AppPage')
+        self._build_ui()
         self.show_user_manual()
-        # 设置字体
-        font = QFont()
-        # font.setFamily("Arial")  # 设置字体名称
-        font.setPointSize(15)    # 设置字体大小
-        self.textBrowser.setFont(font)
 
-        # 绑定按钮的点击事件到相应的函数
-        self.userBut.clicked.connect(self.show_user_manual)
-        self.devBut.clicked.connect(self.show_develop_manual)
+    def _build_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(16)
+
+        eyebrow = CaptionLabel('DOCUMENTATION', self)
+        eyebrow.setObjectName('PageEyebrow')
+        main_layout.addWidget(eyebrow)
+
+        title = TitleLabel('帮助', self)
+        title.setObjectName('PageTitle')
+        main_layout.addWidget(title)
+
+        description = BodyLabel('继续沿用 Markdown 文档源，只把阅读和切换体验统一到 Fluent 界面里。', self)
+        description.setObjectName('PageDescription')
+        description.setWordWrap(True)
+        main_layout.addWidget(description)
+
+        self.segmented = SegmentedWidget(self)
+        self.segmented.addItem('user', '用户文档', self.show_user_manual)
+        self.segmented.addItem('dev', '开发文档', self.show_develop_manual)
+        self.segmented.setCurrentItem('user')
+        main_layout.addWidget(self.segmented, 0)
+
+        self.doc_card = CardWidget(self)
+        self.doc_card.setObjectName('SurfaceCard')
+        card_layout = QVBoxLayout(self.doc_card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
+
+        hint = CaptionLabel('文档中的外部链接会继续使用系统浏览器打开。', self.doc_card)
+        hint.setObjectName('DocHint')
+        hint.setWordWrap(True)
+        card_layout.addWidget(hint)
+
+        self.docs_stack = QStackedWidget(self.doc_card)
+        self.user_browser = self._create_browser(self.doc_card)
+        self.dev_browser = self._create_browser(self.doc_card)
+        self.docs_stack.addWidget(self.user_browser)
+        self.docs_stack.addWidget(self.dev_browser)
+        card_layout.addWidget(self.docs_stack, stretch=1)
+
+        main_layout.addWidget(self.doc_card, stretch=1)
+
+    def _create_browser(self, parent):
+        browser = QTextBrowser(parent)
+        browser.setObjectName('HelpBrowser')
+        browser.setOpenExternalLinks(True)
+        return browser
 
     def show_user_manual(self):
-        manual_path = os.path.join(self.doc_dir, 'user_manual.md')
-        # 显示使用手册的内容，可以是 Markdown 格式
-        self._display_markdown(manual_path)
+        self.segmented.setCurrentItem('user')
+        self.docs_stack.setCurrentWidget(self.user_browser)
+        self._display_markdown(os.path.join(self.doc_dir, 'user_manual.md'), self.user_browser)
 
     def show_develop_manual(self):
-        manual_path = os.path.join(self.doc_dir, 'develop_manual.md')
-        self._display_markdown(manual_path)
+        self.segmented.setCurrentItem('dev')
+        self.docs_stack.setCurrentWidget(self.dev_browser)
+        self._display_markdown(os.path.join(self.doc_dir, 'develop_manual.md'), self.dev_browser)
 
-    def _display_markdown(self, file_path):
-        # 检查文件是否存在并显示内容
+    def _display_markdown(self, file_path: str, browser: QTextBrowser):
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
-                content = file.read()
-                self.textBrowser.setMarkdown(content)
+                browser.setMarkdown(file.read())
         except FileNotFoundError:
-            self.textBrowser.setMarkdown(f"Error: File {file_path} not found.")
-        except Exception as e:
-            self.textBrowser.setMarkdown(f"Error reading file {file_path}: {str(e)}")
+            browser.setMarkdown(f'Error: File {file_path} not found.')
+        except Exception as exc:
+            browser.setMarkdown(f'Error reading file {file_path}: {exc}')
 
 
-# ===========================调试用==============================
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     trial = HelpWindow()

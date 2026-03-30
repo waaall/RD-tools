@@ -3,6 +3,7 @@ pandas
 matplotlib
 scipy
 PySide6
+PySide6-Fluent-Widgets==1.11.1
 pillow
 pydicom
 PyWavelets

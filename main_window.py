@@ -1,139 +1,62 @@
-import sys
-from functools import partial
+from __future__ import annotations
 
-from PySide6.QtGui import *
-from PySide6.QtCore import *
-from PySide6.QtWidgets import *
+from PySide6.QtWidgets import QApplication
+from qfluentwidgets import FluentIcon as FIF, FluentWindow, InfoBar, NavigationItemPosition
 
-from widgets import *
+from modules.app_settings import AppSettings
+from ui.theme import apply_app_theme
+from widgets.file_page import FileWindow
+from widgets.help_page import HelpWindow
+from widgets.setting_page import SettingWindow
 
 
-# =========================================================
-# =======                 主界面类                 =========
-# =========================================================
-class MainWindow(QMainWindow):
-
-    def __init__(self):
+class MainWindow(FluentWindow):
+    def __init__(self, settings: AppSettings):
         super().__init__()
-        # 注意有一些初始化的顺序是不能更改的, 因为有依赖关系
-        self.setWindowTitle("R&D_Tools")
-        self.send_status_message("一切就绪, 确保您阅读文档, 再进行操作")
+        self.settings = settings
 
-        # 初始化Dock和主窗口(centralWidget)
-        self.__init_general_windows()
-        self.setCentralWidget(self.Stack)
+        self.setWindowTitle('RD-tools')
+        self.resize(1320, 840)
+        self.setMinimumSize(1180, 720)
 
-        # 初始化menu bar
-        self.__createActions()
-        self.__createMenu()
+        self._init_interfaces()
+        self._connect_signals()
+        self.switchTo(self.FileWindow)
 
-    # 初始化Dock和主窗口(centralWidget)
-    def __init_general_windows(self):
-        page_groups_names = ['帮助与设置', '批量处理']
-
-        if hasattr(self, 'dock'):
-            return
-        self.dock = QDockWidget()
-        self.dock.setWindowTitle('导航')
-        self.dock_page = DockPage(page_groups_names)
-        self.dock.setWidget(self.dock_page)
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.dock)
-
-        self.Stack = QStackedWidget()
-
-        self.__help_window_name = 'HelpWindow'
-        self.HelpWindow = HelpWindow()
-        self.add_stack_page(self.HelpWindow, group_name=page_groups_names[0], button_name='帮助')
-
-        self.SettingWindow = SettingWindow()
-        self.add_stack_page(self.SettingWindow, group_name=page_groups_names[0], button_name='设置')
-
+    def _init_interfaces(self):
         self.FileWindow = FileWindow()
-        self.add_stack_page(self.FileWindow, group_name=page_groups_names[1], button_name='任务')
+        self.FileWindow.setObjectName('task-center')
 
-    def add_stack_page(self, page_instance, group_name: str = '批量处理', button_name: str = None):
-        """
-        :param page_instance: 页面的类示例, 当然, 需要import你的页面类所在的文件
-        :param group_name: dock_page的组名
-        """
-        page_name = page_instance.__class__.__name__
-        button_name = button_name or page_name
+        self.SettingWindow = SettingWindow(self.settings)
+        self.SettingWindow.setObjectName('settings-center')
 
-        self.Stack.addWidget(page_instance)
-        page_instance.setObjectName(page_name)
+        self.HelpWindow = HelpWindow()
+        self.HelpWindow.setObjectName('help-center')
 
-        self.dock_page.add_button(group_name, button_name,
-                                  lambda: self.switch_stack_page(page_name))
+        self.addSubInterface(self.FileWindow, FIF.IOT, '任务中心', NavigationItemPosition.TOP)
+        self.addSubInterface(self.SettingWindow, FIF.SETTING, '设置', NavigationItemPosition.TOP)
+        self.addSubInterface(self.HelpWindow, FIF.HELP, '帮助', NavigationItemPosition.BOTTOM)
 
-        if hasattr(page_instance, 'result_signal'):
-            page_instance.result_signal.connect(self.send_status_message)
+    def _connect_signals(self):
+        self.FileWindow.notification_requested.connect(self.show_notification)
+        self.SettingWindow.notification_requested.connect(self.show_notification)
+        self.SettingWindow.theme_changed.connect(self.apply_theme)
 
-    def show_dock(self):
-        if hasattr(self, 'dock'):
-            self.dock.show()
-            self.statusBar().showMessage("导航已打开")
-            return
-        self.statusBar().showMessage("初始化导航")
-        self.__init_general_windows()
+    def show_notification(self, level: str, title: str, content: str, duration: int = 3000):
+        notifier = getattr(InfoBar, level, InfoBar.info)
+        notifier(title, content, duration=duration, parent=self)
 
-    def send_status_message(self, message):
-        self.statusBar().showMessage(message)
-
-    def __createActions(self):
-        # 创建 QAction 对象
-        self.help_act = QAction("打开帮助", self, statusTip="帮助界面")
-        # 连接 triggered 信号到槽函数，传递参数
-        self.help_act.triggered.connect(partial(self.switch_stack_page, self.__help_window_name))
-        self.userHelpAct = QAction("使用文档", statusTip="使用文档")
-
-        self.userHelpAct.triggered.connect(self.show_user_help)
-        self.devHelpAct = QAction("开发文档", statusTip="开发文档")
-        self.devHelpAct.triggered.connect(self.show_dev_help)
-
-        self.openDockAct = QAction("打开导航", statusTip="重新打开导航栏")
-        self.openDockAct.triggered.connect(self.show_dock)
-
-    def __createMenu(self):
-        self.windowMenu = self.menuBar().addMenu("窗口")
-        self.windowMenu.addAction(self.openDockAct)
-        self.windowMenu.addAction(self.help_act)
-
-        self.helpMenu = self.menuBar().addMenu("帮助")
-        self.helpMenu.addAction(self.help_act)
-        self.helpMenu.addAction(self.userHelpAct)
-        self.helpMenu.addAction(self.devHelpAct)
-
-    def show_user_help(self):
-        self.switch_stack_page(self.__help_window_name)
-        self.HelpWindow.show_user_manual()
-
-    def show_dev_help(self):
-        self.switch_stack_page(self.__help_window_name)
-        self.HelpWindow.show_develop_manual()
-
-    def switch_stack_page(self, window_name):
-        widget = self.Stack.findChild(QWidget, window_name)
-        if widget:
-            self.Stack.setCurrentWidget(widget)
-            self.fadeInWidget(self.Stack.currentWidget())
-            self.statusBar().showMessage(f"open {window_name}")
-        else:
-            QMessageBox.about(self, 'error', f"Window:  '{window_name}' not found.")
-
-    def fadeInWidget(self, new_widget):         # 有点假, 不需要old界面
-        animationIn = QPropertyAnimation(new_widget)    # 动画的父控件为 login
-        animationIn.setTargetObject(new_widget)         # 给register 做动画
-        animationIn.setPropertyName(b"pos")
-        animationIn.setStartValue(QPoint(-new_widget.width(), 0))
-        animationIn.setEndValue(QPoint(0, 0))
-        animationIn.setDuration(500)
-        animationIn.setEasingCurve(QEasingCurve.InOutExpo)
-        animationIn.start(QAbstractAnimation.DeleteWhenStopped)
+    def apply_theme(self, theme_name: str):
+        apply_app_theme(theme_name, QApplication.instance())
 
 
-# ===========================调试用==============================
 if __name__ == '__main__':
+    from PySide6.QtWidgets import QApplication
+    import sys
+
     app = QApplication(sys.argv)
-    trial = MainWindow()
+    settings = AppSettings()
+    apply_app_theme(settings.theme, app)
+    trial = MainWindow(settings)
     trial.show()
     sys.exit(app.exec())
