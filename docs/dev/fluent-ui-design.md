@@ -162,25 +162,43 @@ python -m pip install PySide6-Fluent-Widgets==1.11.1 -i https://pypi.org/simple
 
 ### 5.1 主题入口
 
-主题逻辑集中在 `ui/theme.py`。
+主题逻辑集中在 `ui/theme.py`，而 `Auto` 模式下的同步调度放在 `main_window.py`。
 
 当前入口函数：
 
 - `resolve_theme(theme_name)`
+- `is_auto_theme(theme_name)`
+- `detect_system_theme()`
 - `apply_app_theme(theme_name, app)`
+- `refresh_auto_app_theme(app)`
 
 其职责是：
 
-- 把现有配置里的 `theme` 映射到 `Theme.LIGHT` 或 `Theme.DARK`
+- 把现有配置里的 `theme` 映射到 `Theme.LIGHT`、`Theme.DARK` 或 `Theme.AUTO`
 - 调用 `setTheme()` 应用明暗主题
 - 调用 `setThemeColor()` 统一设置主强调色
 - 按当前主题加载对应的应用级 QSS
+- 在 `Auto` 模式下刷新 `qconfig.theme` 并补发主题变更信号，保证 Fluent 组件和应用级 QSS 一起更新
+
+当前 `Auto` 模式的设计约束：
+
+- 不再使用 `QFluentWidgets` 自带的 `SystemThemeListener(QThread)`
+- 只在 `theme == Auto` 时启用主线程 `QTimer`
+- 轮询间隔由 `SYSTEM_THEME_SYNC_INTERVAL_MS` 控制，当前为 `1000 ms`
+- 退出时只停止定时器，不在 `closeEvent()` 中等待后台主题线程退出
+
+这样做的原因：
+
+- 避免关闭窗口时固定等待主题监听线程
+- 避免 Windows 上出现 `QThread: Destroyed while thread '' is still running`
+- 保留 `Auto` 模式下跟随系统明暗主题的能力
 
 ### 5.2 当前视觉 token
 
 当前设计使用的核心 token：
 
-- 主强调色：`#2F6FED`
+- Fluent 组件主题色：`#29526f`
+- 应用级 accent token：`#2F6FED`
 - 成功色：`#2AA676`
 - 警告色：`#D49C1D`
 - 错误色：`#C55252`
@@ -623,9 +641,11 @@ TaskDescriptor(
 3. 任务中心选择目录、勾选目录、切换任务、清空日志正常
 4. 任务运行时状态变化正常
 5. 设置页所有卡片可正常显示和写回
-6. 明暗主题切换后布局没有异常
-7. 帮助页文档能加载、页签能切换、外链可打开
-8. 在 `1280x720` 下没有明显重叠和跑版
+6. `Light`、`Dark`、`Auto` 三种主题模式都能正常工作
+7. `Auto` 模式下切换系统明暗主题后，界面可在轮询周期内自动同步
+8. 关闭窗口时不再因主题同步出现明显额外等待或 `QThread` 销毁警告
+9. 帮助页文档能加载、页签能切换、外链可打开
+10. 在 `1280x720` 下没有明显重叠和跑版
 
 ## 15. 后续演进建议
 

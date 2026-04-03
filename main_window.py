@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, QTimer
 from PySide6.QtGui import QCloseEvent, QCursor, QGuiApplication, QScreen
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import (
@@ -8,11 +8,16 @@ from qfluentwidgets import (
     FluentWindow,
     InfoBar,
     NavigationItemPosition,
-    SystemThemeListener,
 )
 
 from modules.app_settings import AppSettings
-from ui.theme import apply_app_theme
+from ui.theme import (
+    SYSTEM_THEME_SYNC_INTERVAL_MS,
+    apply_app_theme,
+    detect_system_theme,
+    is_auto_theme,
+    refresh_auto_app_theme,
+)
 from ui.task_descriptor import TaskDescriptor
 from widgets.file_page import FileWindow
 from widgets.help_page import HelpWindow
@@ -28,7 +33,10 @@ class MainWindow(FluentWindow):
     def __init__(self, settings: AppSettings, task_descriptors: list[TaskDescriptor] | None = None):
         super().__init__()
         self.settings = settings
-        self._theme_listener = SystemThemeListener(self)
+        self._theme_sync_timer = QTimer(self)
+        self._theme_sync_timer.setInterval(SYSTEM_THEME_SYNC_INTERVAL_MS)
+        self._theme_sync_timer.timeout.connect(self._sync_auto_theme)
+        self._last_system_theme = None
 
         self.setWindowTitle('RD-tools')
         self.resize(self.FALLBACK_WINDOW_SIZE)
@@ -36,7 +44,7 @@ class MainWindow(FluentWindow):
 
         self._init_interfaces(task_descriptors or [])
         self._connect_signals()
-        self._theme_listener.start()
+        self._configure_theme_sync(self.settings.theme)
         self.switchTo(self.FileWindow)
 
     def _init_interfaces(self, task_descriptors: list[TaskDescriptor]):
@@ -57,7 +65,6 @@ class MainWindow(FluentWindow):
         self.FileWindow.notification_requested.connect(self.show_notification)
         self.SettingWindow.notification_requested.connect(self.show_notification)
         self.SettingWindow.theme_changed.connect(self.apply_theme)
-        self._theme_listener.systemThemeChanged.connect(self.refresh_theme)
 
     def show_notification(self, level: str, title: str, content: str, duration: int = 3000):
         notifier = getattr(InfoBar, level, InfoBar.info)
@@ -65,10 +72,31 @@ class MainWindow(FluentWindow):
 
     def apply_theme(self, theme_name: str):
         apply_app_theme(theme_name, QApplication.instance())
+        self._configure_theme_sync(theme_name)
         self.FileWindow.refresh_log_view()
 
-    def refresh_theme(self):
-        apply_app_theme(self.settings.theme, QApplication.instance())
+    def _configure_theme_sync(self, theme_name: str | None):
+        if not is_auto_theme(theme_name):
+            self._last_system_theme = None
+            if self._theme_sync_timer.isActive():
+                self._theme_sync_timer.stop()
+            return
+
+        self._last_system_theme = detect_system_theme()
+        if not self._theme_sync_timer.isActive():
+            self._theme_sync_timer.start()
+
+    def _sync_auto_theme(self):
+        if not is_auto_theme(self.settings.theme):
+            self._configure_theme_sync(self.settings.theme)
+            return
+
+        current_system_theme = detect_system_theme()
+        if current_system_theme == self._last_system_theme:
+            return
+
+        self._last_system_theme = current_system_theme
+        refresh_auto_app_theme(QApplication.instance())
         self.FileWindow.refresh_log_view()
 
     def open_task_settings(self, task_key: str) -> bool:
@@ -110,9 +138,8 @@ class MainWindow(FluentWindow):
         return QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
 
     def closeEvent(self, event: QCloseEvent):
-        if self._theme_listener.isRunning():
-            self._theme_listener.requestInterruption()
-            self._theme_listener.wait(2000)
+        if self._theme_sync_timer.isActive():
+            self._theme_sync_timer.stop()
         super().closeEvent(event)
 
 

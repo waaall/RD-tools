@@ -4,12 +4,14 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+import darkdetect
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import StyleSheetBase, Theme, qconfig, setTheme, setThemeColor
 
 
-APP_THEME_COLOR = '#2F6FED'
+APP_THEME_COLOR = "#29526f"
+SYSTEM_THEME_SYNC_INTERVAL_MS = 1000
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +48,17 @@ def resolve_theme(theme_name: str | None) -> Theme:
     return Theme.DARK
 
 
+def is_auto_theme(theme_name: str | None) -> bool:
+    return resolve_theme(theme_name) == Theme.AUTO
+
+
+def detect_system_theme() -> Theme:
+    normalized_name = (darkdetect.theme() or '').strip().lower()
+    if normalized_name == 'dark':
+        return Theme.DARK
+    return Theme.LIGHT
+
+
 def get_effective_theme(theme: Theme = Theme.AUTO) -> Theme:
     return qconfig.theme if theme == Theme.AUTO else theme
 
@@ -72,3 +85,13 @@ def apply_app_theme(theme_name: str | None, app: QApplication | None = None) -> 
     setTheme(theme)
     setThemeColor(QColor(APP_THEME_COLOR))
     return load_app_stylesheet(qt_app, theme)
+
+
+def refresh_auto_app_theme(app: QApplication | None = None) -> Theme:
+    qt_app = app or QApplication.instance()
+    if qt_app is None:
+        raise RuntimeError('QApplication must exist before refreshing the auto theme.')
+
+    qconfig.theme = Theme.AUTO
+    qconfig._cfg.themeChanged.emit(Theme.AUTO)
+    return apply_app_theme(Theme.AUTO.value, qt_app)
