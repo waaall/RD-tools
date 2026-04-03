@@ -17,34 +17,43 @@
 
 这些内容请看 `docs/dev/fluent-ui-design.md`。
 
+当前任务懒加载机制的设计与边界，不在本文详细展开；请参考 `docs/dev/lazy-load-design.md`。
+
 ## 1. 当前后端链路
 
 当前批量处理后端的主链路如下：
 
 ```mermaid
 flowchart LR
-    A["FileWindow 选择目录并点击执行"] --> B["BatchFilesBinding.handler_binding()"]
-    B --> C["BatchFilesBinding.run()"]
-    C --> D["FilesBasic.set_work_folder()"]
-    C --> E["FilesBasic.selected_dirs_handler()"]
-    E --> F["子类 _data_dir_handler() / single_file_handler()"]
-    F --> G["send_message(text, level=...)"]
-    G --> H["TaskMessage"]
-    H --> I["FilesBasic.result_signal(object)"]
-    I --> J["BatchFilesBinding.result_signal(task_key, object)"]
-    J --> K["FileWindow.append_operation_log()"]
-    K --> L["日志 UI 按 level 着色渲染"]
+    A["FileWindow 选择目录并点击执行"] --> B["launch_batch_operation()"]
+    B --> C["确认弹窗 + 创建 one-shot BatchFilesBinding"]
+    C --> D["BatchFilesBinding.run()"]
+    D --> E["TaskLoader.load_class() 动态加载任务类"]
+    D --> F["FilesBasic.set_work_folder()"]
+    D --> G["FilesBasic.selected_dirs_handler()"]
+    G --> H["子类 _data_dir_handler() / single_file_handler()"]
+    H --> I["send_message(text, level=...)"]
+    I --> J["TaskMessage"]
+    J --> K["FilesBasic.result_signal(object) / bootstrap reporter"]
+    K --> L["BatchFilesBinding.result_signal(task_key, object)"]
+    L --> M["FileWindow.append_operation_log()"]
+    M --> N["日志 UI 按 level 着色渲染"]
 ```
 
 对应关键文件：
 
 - `main.py`
   - 任务注册
+  - `launch_batch_operation()`
   - `BatchFilesBinding`
   - 后端与 UI 的接线
+- `core/task_loader.py`
+  - 任务类动态加载
+  - 类缓存
 - `modules/files_basic.py`
   - 批量处理基类
   - 日志会话
+  - bootstrap reporter
   - 工作目录与路径解析
 - `core/task_message.py`
   - `TaskMessage`
@@ -157,7 +166,7 @@ self.send_message("SUCCESS: 已保存结果")
 当前模型分两层：
 
 1. `BatchFilesBinding(QThread)`
-   - 负责把单个任务放到后台线程运行
+   - 负责把单次任务执行放到后台线程运行
    - 防止 UI 主线程卡住
 
 2. `ThreadPoolExecutor`
@@ -319,9 +328,11 @@ class ExampleHandler(FilesBasic):
 
 新增任务必须：
 
-1. 导入任务类
-2. 在 `build_task_descriptors()` 中增加 `TaskDescriptor`
+1. 在 `build_task_descriptors()` 中增加 `TaskDescriptor`
+2. 补齐 `module_path`、`class_name`、`settings_group`
 3. 补齐标题、描述、图标和默认参数
+
+当前不再要求在 `main.py` 顶层导入任务类；任务类由运行时懒加载机制按需解析。详细参考 `docs/dev/lazy-load-design.md`。
 
 ### 6.4 如果任务需要配置项
 
@@ -336,7 +347,8 @@ class ExampleHandler(FilesBasic):
 
 - 设置项名和类参数名保持一致
 - 默认值只保留一份主定义
-- 运行时改配置通过 `changed_signal` 注入，不要自己再做一套配置系统
+- 配置读写仍统一走 `AppSettings`，不要自己再做一套配置系统
+- 当前正式语义是：修改设置只影响下次执行，不再实时推送到正在运行的任务实例
 
 ## 7. 代码编写规范
 

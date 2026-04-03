@@ -8,5 +8,7 @@ class TaskDescriptor:
     title: str
     description: str
     icon: Any
-    operation_cls: type
+    module_path: str
+    class_name: str
+    settings_group: str
     default_params: dict[str, Any] = field(default_factory=dict)

@@ -18,12 +18,25 @@ from pathlib import Path
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor
 
-# 尝试导入faster-whisper库, 但不强制要求
-try:
-    from faster_whisper import WhisperModel
-    has_faster_whisper = True
-except ImportError:
-    has_faster_whisper = False
+_WHISPER_MODEL_CLASS = None
+_WHISPER_IMPORT_FAILED = False
+
+
+def _get_whisper_model_class():
+    global _WHISPER_MODEL_CLASS, _WHISPER_IMPORT_FAILED
+    if _WHISPER_MODEL_CLASS is not None:
+        return _WHISPER_MODEL_CLASS
+    if _WHISPER_IMPORT_FAILED:
+        return None
+
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        _WHISPER_IMPORT_FAILED = True
+        return None
+
+    _WHISPER_MODEL_CLASS = WhisperModel
+    return _WHISPER_MODEL_CLASS
 
 # 获取当前文件所在目录,并加入系统环境变量(临时)
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -61,6 +74,7 @@ class GenSubtitles(FilesBasic):
         _audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma']
         self.suffixs = _video_extensions + _audio_extensions
         self.out_dir_prefix = ''
+        self.model = None
         # 检查是否有whisper-cli
         self.has_whisper_cli = shutil.which("whisper-cli") is not None
         # 检查ffmpeg
@@ -69,14 +83,15 @@ class GenSubtitles(FilesBasic):
 
     def _check_whisper_requirements(self) -> bool:
         """检查必需的工具是否存在"""
+        whisper_model_class = _get_whisper_model_class()
 
         # 检查是否有whisper-cli或faster-whisper库
-        if not self.has_whisper_cli and not has_faster_whisper:
+        if not self.has_whisper_cli and whisper_model_class is None:
             self.send_message("未找到whisper-cli或faster-whisper.请至少安装一个.", level=MessageLevel.ERROR)
             return False
 
         # 如果没有whisper-cli, 则加载faster-whisper模型
-        if not has_faster_whisper and self.has_whisper_cli:
+        if whisper_model_class is None and self.has_whisper_cli:
             self.send_message("未检测到faster-whisper, 使用whisper-cli", level=MessageLevel.WARNING)
 
         # 验证和确定模型路径
@@ -198,7 +213,8 @@ class GenSubtitles(FilesBasic):
             return True
 
         # 先尝试使用faster-whisper库
-        if has_faster_whisper:
+        whisper_model_class = _get_whisper_model_class()
+        if whisper_model_class is not None:
             try:
                 import torch
                 cuda_available = torch.cuda.is_available()
@@ -216,7 +232,7 @@ class GenSubtitles(FilesBasic):
             # 避免错误加载与重复加载
             if not hasattr(self, 'model') or self.model is None:
                 try:
-                    self.model = WhisperModel(
+                    self.model = whisper_model_class(
                         self.model_path,
                         device=device,
                         compute_type=self.compute_type,
@@ -235,6 +251,8 @@ class GenSubtitles(FilesBasic):
 
             self.send_message(f"faster-whisper开始转写 '{basename}'...", level=MessageLevel.INFO)
             return self._use_faster_whisper(audio_path, original_video, output_srt_path)
+
+        return self._use_whisper_cli(audio_path, original_video, basename)
 
     def _use_faster_whisper(self, audio_path: Path, original_video: Path, output_srt_path: Path) -> bool:
         """使用faster-whisper进行转写"""

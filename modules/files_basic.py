@@ -32,6 +32,7 @@ from core import MessageLevel, TaskMessage, ensure_task_message
 # =========================================================
 class FilesBasic(QObject):
     result_signal = Signal(object)
+    _bootstrap_context = threading.local()
 
     def __init__(self,
                  log_folder_name: str = 'handle_log',
@@ -67,6 +68,15 @@ class FilesBasic(QObject):
         self.user_home_path = os.environ.get("HOME", "")
         if not self.user_home_path and os.name == 'nt':  # Windows系统
             self.user_home_path = os.environ.get("USERPROFILE", "")
+
+    @classmethod
+    def set_bootstrap_reporter(cls, reporter):
+        cls._bootstrap_context.reporter = reporter
+
+    @classmethod
+    def clear_bootstrap_reporter(cls):
+        if hasattr(cls._bootstrap_context, 'reporter'):
+            del cls._bootstrap_context.reporter
 
     # ======================设置workfolder======================
     def set_work_folder(self, work_folder: str):
@@ -164,6 +174,12 @@ class FilesBasic(QObject):
                 self._write_log_entry_unlocked(message)
             else:
                 self._pending_log_messages.append(message)
+        bootstrap_reporter = getattr(self._bootstrap_context, 'reporter', None)
+        if bootstrap_reporter is not None:
+            try:
+                bootstrap_reporter(message)
+            except Exception:
+                pass
         self.result_signal.emit(message)
 
     # ========================保存文件==========================

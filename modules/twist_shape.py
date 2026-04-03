@@ -19,10 +19,28 @@
 # =========================用到的库==========================
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
 
-import cv2
 import numpy as np
+
+_CV2 = None
+_CV2_IMPORT_FAILED = False
+
+
+def _get_cv2_module():
+    global _CV2, _CV2_IMPORT_FAILED
+    if _CV2 is not None:
+        return _CV2
+    if _CV2_IMPORT_FAILED:
+        return None
+
+    try:
+        import cv2
+    except ImportError:
+        _CV2_IMPORT_FAILED = True
+        return None
+
+    _CV2 = cv2
+    return _CV2
 
 # 获取当前脚本所在目录的父目录
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -202,6 +220,11 @@ class TwistImgs(FilesBasic):
 
     # =======================扭转单张图片========================
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
+        cv2 = _get_cv2_module()
+        if cv2 is None:
+            self.send_message("Error: 未找到 OpenCV(cv2)，无法执行图片视角变换")
+            return
+
         # 检查文件路径格式
         if not self.check_file_path(abs_input_path, abs_outfolder_path):
             self.send_message("Error: failed to check_file_path")

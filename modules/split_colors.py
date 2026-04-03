@@ -13,8 +13,6 @@
 # =========================用到的库==========================
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
-
 from PIL import Image
 
 # 获取当前脚本所在目录的父目录

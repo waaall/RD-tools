@@ -231,7 +231,7 @@ class SettingWindow(QWidget):
         title.setObjectName('PageTitle')
         main_layout.addWidget(title)
 
-        description = BodyLabel('设置项变更即时写回配置文件。通用设置与任务设置共享同一套侧栏 + 详情布局，不改变现有配置结构和信号链路。', self)
+        description = BodyLabel('设置项变更即时写回配置文件。通用设置与任务设置共享同一套侧栏 + 详情布局，不改变现有配置结构与任务分组命名。', self)
         description.setObjectName('PageDescription')
         description.setWordWrap(True)
         main_layout.addWidget(description)
@@ -261,7 +261,7 @@ class SettingWindow(QWidget):
 
         task_items = []
         for descriptor in self.task_descriptors:
-            if descriptor.operation_cls.__name__ not in self._configured_task_groups:
+            if descriptor.settings_group not in self._configured_task_groups:
                 continue
             task_items.append(SettingsNavItem(key=descriptor.key, title=descriptor.title, icon=descriptor.icon))
         self.task_view.set_nav_items(task_items)
@@ -289,7 +289,7 @@ class SettingWindow(QWidget):
             self.task_view.show_empty_state('任务不存在', '未找到当前任务的元数据。')
             return
 
-        entries = self.settings.get_setting_entries('Batch_Files', group_name=descriptor.operation_cls.__name__)
+        entries = self.settings.get_setting_entries('Batch_Files', group_name=descriptor.settings_group)
         grouped_entries = self._group_entries(entries, start_index=2, default_group_title=descriptor.title)
         self._render_grouped_entries(self.task_view, grouped_entries, descriptor.icon)
 
@@ -330,7 +330,7 @@ class SettingWindow(QWidget):
         descriptor = self._task_descriptor_map.get(task_key)
         if descriptor is None:
             return False
-        return descriptor.operation_cls.__name__ in self._configured_task_groups
+        return descriptor.settings_group in self._configured_task_groups
 
     def open_task_settings(self, task_key: str) -> bool:
         if not self.has_task_settings(task_key):

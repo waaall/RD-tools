@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
     ===========================README============================
     create date:    20250318
@@ -15,14 +17,69 @@ import os
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
 
-import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # 设置后端为Agg，避免多线程问题
-import matplotlib.pyplot as plt
-import pandas as pd
-from scipy.fft import fft, fftfreq
-from scipy.signal import butter, filtfilt
+if TYPE_CHECKING:
+    import numpy as np
+
+_NUMPY = None
+_PANDAS = None
+_PYPLOT = None
+_FFT = None
+_FFTFREQ = None
+_BUTTER = None
+_FILTFILT = None
+
+
+def _get_numpy_module():
+    global _NUMPY
+    if _NUMPY is None:
+        import numpy as np
+
+        _NUMPY = np
+    return _NUMPY
+
+
+def _get_pandas_module():
+    global _PANDAS
+    if _PANDAS is None:
+        import pandas as pd
+
+        _PANDAS = pd
+    return _PANDAS
+
+
+def _get_pyplot_module():
+    global _PYPLOT
+    if _PYPLOT is None:
+        import matplotlib
+
+        if 'matplotlib.pyplot' not in sys.modules:
+            matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        _PYPLOT = plt
+    return _PYPLOT
+
+
+def _get_fft_tools():
+    global _FFT, _FFTFREQ
+    if _FFT is None or _FFTFREQ is None:
+        from scipy.fft import fft, fftfreq
+
+        _FFT = fft
+        _FFTFREQ = fftfreq
+    return _FFT, _FFTFREQ
+
+
+def _get_signal_filters():
+    global _BUTTER, _FILTFILT
+    if _BUTTER is None or _FILTFILT is None:
+        from scipy.signal import butter, filtfilt
+
+        _BUTTER = butter
+        _FILTFILT = filtfilt
+    return _BUTTER, _FILTFILT
 
 # 获取当前文件所在目录,并加入系统环境变量(临时)
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -245,6 +302,9 @@ class ECGHandler(FilesBasic):
 
     def single_file_handler(self, _data_dir: str, abs_input_path: str):
         """处理单个CSV文件: 生成时域和频域图表"""
+        np = _get_numpy_module()
+        pd = _get_pandas_module()
+
         # 检查文件路径格式
         if not os.path.isfile(abs_input_path):
             self.send_message(f"Error: Input file does not exist: {abs_input_path}")
@@ -390,6 +450,8 @@ class ECGHandler(FilesBasic):
         Returns:
             滤波后的ECG数据
         """
+        butter, filtfilt = _get_signal_filters()
+
         # 确保有最低频率
         if min_freq is None:
             min_freq = self.calculate_min_frequency(len(data))
@@ -436,6 +498,9 @@ class ECGHandler(FilesBasic):
                          filtered_data: np.ndarray,
                          output_dir: str):
         """绘制原始信号与滤波后信号的对比图"""
+        np = _get_numpy_module()
+        plt = _get_pyplot_module()
+
         time = np.arange(len(original_data)) / self.sampling_rate
         filtered_time = np.arange(len(filtered_data)) / self.sampling_rate
 
@@ -483,6 +548,9 @@ class ECGHandler(FilesBasic):
 
     def _plot_time_domain(self, data: np.ndarray, output_dir: str, is_trimmed: bool = None):
         """绘制时域信号图"""
+        np = _get_numpy_module()
+        plt = _get_pyplot_module()
+
         # 根据目录判断是原始数据还是滤波后数据
         if is_trimmed is None:
             is_trimmed = self.trim_raw_data if "filtered" not in output_dir else self.trim_filtered_data
@@ -527,6 +595,10 @@ class ECGHandler(FilesBasic):
             is_trimmed: 是否为裁剪后的数据
             min_freq: 最低频率，如果为None则计算
         """
+        np = _get_numpy_module()
+        plt = _get_pyplot_module()
+        fft, fftfreq = _get_fft_tools()
+
         # 根据目录判断是原始数据还是滤波后数据
         if is_trimmed is None:
             is_trimmed = self.trim_raw_data if "filtered" not in output_dir else self.trim_filtered_data
@@ -589,6 +661,9 @@ class ECGHandler(FilesBasic):
             output_dir: 输出目录路径
             suffix: 可选的文件名后缀
         """
+        np = _get_numpy_module()
+        plt = _get_pyplot_module()
+
         # 尝试导入neurokit2
         try:
             import neurokit2 as nk
