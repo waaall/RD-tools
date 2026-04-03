@@ -1,38 +1,91 @@
-# RD-tools 启动耗时分析指南
+# 应用启动耗时分析指南
 
-本文档用于说明 RD-tools 当前这类桌面 Python 应用，应该如何分析“启动慢”的原因，描述分析方法、判断思路和后续优化方向。
+本文档说明如何对 Python 桌面应用的启动耗时进行定位与分析。文档重点在于建立一致的分析方法，帮助开发人员回答“时间消耗在哪里”“应优先优化什么”这两个核心问题，而不是直接预设某一种优化方案。
 
-## 1. 最先执行的命令
+正文以通用方法为主，最后附带一节 RD-tools 的示例说明，便于将方法与实际项目对应起来。
 
-启动耗时分析时，第一步建议先跑下面这条命令：
+## 1. 启动耗时分析要回答的问题
 
-```bash
-python3 -X importtime -c 'import main' 2> /tmp/rdtools_importtime.txt && tail -n 120 /tmp/rdtools_importtime.txt
-```
+在开始测量之前，应先明确启动耗时分析的目标。一次有效的分析，至少需要回答以下问题：
 
-这条命令的含义是：
+- 启动总耗时是多少。
+- 耗时主要集中在哪个阶段，例如入口导入、依赖导入、配置初始化、UI 构造、首次任务注册，或打包产物的额外开销。
+- 问题是否稳定可复现，是否只出现在冷启动、首次启动或特定环境下。
+- 源码运行与打包运行的表现是否一致。
+- 优化优先级应放在代码结构、依赖管理、缓存目录、运行环境，还是打包方式。
 
-- `python3 -X importtime`
-  - 打开 Python 自带的 import 耗时统计。
-- `-c 'import main'`
-  - 直接导入入口模块，模拟程序启动时的 import 链路。
-- `2> /tmp/rdtools_importtime.txt`
-  - `importtime` 输出写在标准错误里，所以要重定向到文件。
-- `tail -n 120`
-  - 先看最后 120 行，快速观察末端的大头模块。
+如果上述问题尚未回答，通常不建议直接进入代码优化阶段。否则很容易在非关键路径上投入过多精力。
 
-这个命令适合“先抓一把大概情况”，但它还不够通用，也不够适合后续反复使用。
+## 2. 最小排查顺序
 
-## 2. 更通用、更友好的版本
+为避免分析过程失焦，建议按以下顺序开展启动耗时排查。
 
-### 2.1 通用函数：指定入口模块并保存结果
+### 2.1 明确测量口径
 
-推荐在终端里临时定义下面这个函数：
+首先定义“启动完成”的判定标准。常见口径包括：
+
+- 主进程启动到主窗口首次显示。
+- 主窗口显示到可交互。
+- 命令发出到首页数据加载完成。
+
+不同口径会直接影响结论。开发文档、测试记录和优化对比应使用同一口径。
+
+### 2.2 先建立总耗时基线
+
+在分解问题之前，应先获得整体启动时间，例如：
+
+- 冷启动耗时。
+- 热启动耗时。
+- 源码运行耗时。
+- 打包运行耗时。
+
+这一步的目的不是定位根因，而是确认问题是否真实存在，以及后续优化是否有效。
+
+### 2.3 按阶段拆分启动路径
+
+启动耗时通常可以拆为以下几个部分：
+
+- 入口模块导入。
+- 业务模块导入。
+- 配置、缓存、模型或资源初始化。
+- GUI 应用对象创建。
+- 主窗口及页面装配。
+- 启动后立即执行的扫描、注册或预加载逻辑。
+
+如果不先做阶段拆分，后续即使拿到了多个耗时数字，也很难判断它们之间的因果关系。
+
+### 2.4 单独验证可疑模块或初始化步骤
+
+当总耗时和分段耗时已经显示某一阶段明显偏重时，应继续拆到具体模块或具体初始化动作，例如：
+
+- 某个重量级依赖是否在模块顶层导入。
+- 某个对象的构造函数是否执行了大量 I/O。
+- 某个页面是否在创建时立即加载数据或扫描文件。
+
+### 2.5 最后再判断优化优先级
+
+完成定位之后，再决定优化顺序。通常优先级如下：
+
+- 减少启动路径上的不必要工作。
+- 延迟加载重量级依赖。
+- 将重初始化从“启动时”移动到“真正使用时”。
+- 处理环境与缓存问题。
+- 重新评估打包方式。
+
+## 3. 常用分析手段
+
+本节提供常见、可迁移的分析方法。示例命令中的模块名和函数名需要根据具体项目替换。
+
+### 3.1 使用 `importtime` 分析导入链
+
+`importtime` 适用于判断 Python 启动链路中哪些模块导入成本较高，尤其适合排查“程序尚未进入业务逻辑，启动时间已经明显偏长”的情况。
+
+建议先定义一个简单的辅助函数：
 
 ```bash
 profile_importtime() {
   local module="${1:-main}"
-  local out="${2:-/tmp/${module}_importtime_$(date +%Y%m%d_%H%M%S).txt}"
+  local out="${2:-/tmp/${module//./_}_importtime_$(date +%Y%m%d_%H%M%S).txt}"
 
   python3 -X importtime -c "import ${module}" 2> "${out}" || return $?
 
@@ -45,22 +98,18 @@ profile_importtime() {
 用法示例：
 
 ```bash
-profile_importtime
 profile_importtime main
-profile_importtime main_window
-profile_importtime modules.ECG_handler
+profile_importtime your_ui_module
+profile_importtime your_feature_module
 ```
 
-这个版本比单条命令更友好，原因是：
+说明：
 
-- 可以直接传入任意模块名
-- 输出文件带时间戳，不会反复覆盖
-- 默认参数对当前项目足够顺手
-- 适合后续做多轮对比
+- `python3 -X importtime` 用于输出导入耗时统计。
+- 输出会写入标准错误，因此需要使用 `2>` 重定向。
+- `tail -n 120` 只适合快速预览，不适合作为正式结论。
 
-### 2.2 汇总函数：按累计耗时排序
-
-只看 `tail -n 120` 不够，因为它只能看到日志尾部，不能稳定找出“累计耗时最大”的模块。建议再配一个汇总函数：
+如果需要按累计耗时排序，可配合以下汇总脚本：
 
 ```bash
 summarize_importtime() {
@@ -89,61 +138,74 @@ PY
 }
 ```
 
-用法示例：
+建议使用方式：
 
-```bash
-profile_importtime main /tmp/rdtools_importtime.txt
-summarize_importtime /tmp/rdtools_importtime.txt
-```
+1. 先运行 `profile_importtime <入口模块>`，保留完整日志。
+2. 再运行 `summarize_importtime <日志文件>`，按累计耗时查看最重模块。
+3. 对前几名模块做进一步验证，而不是仅凭日志尾部做判断。
 
-建议把这两个函数一起用：
+### 3.2 使用分段计时建立阶段视图
 
-1. `profile_importtime` 先生成原始日志。
-2. `summarize_importtime` 再按累计耗时排序看前 30 名。
+如果目标是判断“慢在导入、初始化还是 UI 构造”，分段计时通常比单次总耗时更有价值。
 
-## 3. 推荐的分析顺序
-
-分析启动慢时，不要一上来就假设“模块太多”或者“UI 太复杂”。建议按下面顺序拆：
-
-### 3.1 先区分是 import 慢，还是窗口构造慢
-
-先测入口 import：
+入口模块导入示例：
 
 ```bash
 python3 - <<'PY'
 import time
+
 start = time.perf_counter()
-import main
-print(f'import main: {time.perf_counter() - start:.3f}s')
+import your_entry_module
+print(f'import your_entry_module: {time.perf_counter() - start:.3f}s')
 PY
 ```
 
-再测主窗口模块 import：
+主窗口模块导入示例：
 
 ```bash
 python3 - <<'PY'
 import time
+
 start = time.perf_counter()
-import main_window
-print(f'import main_window: {time.perf_counter() - start:.3f}s')
+import your_ui_module
+print(f'import your_ui_module: {time.perf_counter() - start:.3f}s')
 PY
 ```
 
-如果 `import main` 很慢，但 `import main_window` 明显快，通常说明问题主要在业务模块导入链，而不是窗口壳本身。
+如果项目已经具备明确的初始化函数，也可以进一步分段：
 
-### 3.2 再拆单个重量级模块
+```bash
+python3 - <<'PY'
+import time
 
-对怀疑重的模块逐个做冷导入：
+from your_entry_module import create_app, create_main_window
+
+t0 = time.perf_counter()
+app = create_app()
+t1 = time.perf_counter()
+window = create_main_window()
+t2 = time.perf_counter()
+
+print(f'create_app: {t1 - t0:.3f}s')
+print(f'create_main_window: {t2 - t1:.3f}s')
+print(f'total: {t2 - t0:.3f}s')
+PY
+```
+
+如果项目没有统一的工厂函数，可在入口文件中临时插入同类计时点，原则是保持测量边界清晰。
+
+### 3.3 单独测试可疑模块的冷导入
+
+当 `importtime` 或分段计时已经表明导入链过重时，建议对可疑模块逐个验证：
 
 ```bash
 python3 - <<'PY'
 import time
 
 mods = [
-    'modules.ECG_handler',
-    'modules.gen_subtitles',
-    'modules.twist_shape',
-    'modules.dicom_to_imgs',
+    'your_heavy_module_a',
+    'your_heavy_module_b',
+    'your_heavy_module_c',
 ]
 
 for mod in mods:
@@ -153,288 +215,216 @@ for mod in mods:
 PY
 ```
 
-这样可以快速确认：
+此方法适合回答以下问题：
 
-- 是不是只有少数模块特别重
-- 哪些功能最值得优先做懒加载
+- 是否只有少数模块特别重。
+- 哪些模块值得优先做懒加载。
+- 重量级依赖是否被提前拉入启动路径。
 
-### 3.3 再区分“模块导入慢”还是“对象构造慢”
+### 3.4 区分“模块导入慢”与“对象构造慢”
 
-有时类的 `__init__()` 很重，有时只是模块顶层 import 很重。需要拆开看：
+启动优化中一个常见误判是：看到某个类相关代码很多，就默认问题出在构造函数。实际情况可能只是模块顶层导入过重。
+
+可使用以下方式拆分：
 
 ```bash
 python3 - <<'PY'
 import time
-from modules.ECG_handler import ECGHandler
+from your_module import YourClass
 
 start = time.perf_counter()
-ECGHandler()
-print(f'ECGHandler init: {time.perf_counter() - start:.4f}s')
+obj = YourClass()
+print(f'YourClass init: {time.perf_counter() - start:.4f}s')
 PY
 ```
 
-如果对象构造几乎不耗时，而模块导入很慢，说明应该优先治理顶层 import，而不是先改构造函数。
+判断原则：
 
-### 3.4 如果怀疑 UI 构造慢，再测窗口装配
+- 如果模块导入很慢，而对象构造很快，应优先治理顶层导入。
+- 如果模块导入较快，而对象构造很慢，应检查构造函数中的 I/O、扫描、模型加载或页面装配逻辑。
 
-GUI 项目可以用离屏模式做无界面测试：
+### 3.5 对 GUI 项目补充离屏 UI 测试
+
+对于 PySide6 或 PyQt 项目，离屏测试有助于排除图形环境差异，并单独测量 UI 构造成本。
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 - <<'PY'
 import time
-import main
-from PySide6.QtWidgets import QApplication
 
-start = time.perf_counter()
+from PySide6.QtWidgets import QApplication
+from your_entry_module import build_main_window
+
+t0 = time.perf_counter()
 app = QApplication([])
-settings = main.AppSettings()
-descriptors = main.build_task_descriptors()
-window = main.MainWindow(settings, descriptors)
-print(f'build ui: {time.perf_counter() - start:.3f}s')
+t1 = time.perf_counter()
+window = build_main_window()
+t2 = time.perf_counter()
+
+print(f'QApplication: {t1 - t0:.3f}s')
+print(f'build_main_window: {t2 - t1:.3f}s')
+print(f'total: {t2 - t0:.3f}s')
 PY
 ```
 
-这样可以判断慢点是在：
+适用场景：
 
-- Python import 链
-- Qt 应用对象创建
-- 主窗口及页面装配
+- 怀疑 `QApplication` 创建本身较慢。
+- 怀疑主窗口或页面装配成本过高。
+- 需要在无图形界面的自动化环境中复现问题。
 
-### 3.5 最后再看打包方式有没有叠加成本
+说明：
 
-如果源码启动和打包启动体感差异很大，还要检查打包模式，尤其是：
+- 示例中的 `build_main_window` 仅为占位名称，需要替换为实际构造逻辑。
+- 如果窗口构造依赖配置对象、任务描述或服务容器，也应将这些准备步骤纳入计时。
 
-- `PyInstaller --onefile`
-- 首次启动自解包
-- 动态库加载
-- 安全扫描
+### 3.6 对比源码运行与打包运行
 
-源码分析只能覆盖 Python 层；打包产物的启动开销要单独看。
+源码分析和打包分析不应混为一谈。两者的启动开销来源并不相同。
 
-## 4. 本次 RD-tools 的分析思路
+建议至少对比以下维度：
 
-这次分析 RD-tools 启动慢时，采用的是下面这条链路：
+- 源码运行与打包运行的总耗时差异。
+- 首次启动与再次启动的差异。
+- `--onefile` 与 `--onedir` 的差异。
+- 是否存在首次解包、动态库加载、签名校验或安全扫描成本。
 
-1. 先看入口文件 `main.py`
-   - 判断是否在顶层直接导入了所有任务模块。
-   - 如果顶层已经把所有任务类都 `import` 进来，那么懒加载就很可能有意义。
+如果源码运行较快，而打包产物明显偏慢，优先检查打包方式和运行环境；不要仅依据源码分析结果修改业务代码。
 
-2. 再看 `main_window.py` 和页面构造
-   - 判断 UI 是否在启动时主动扫描工作目录、初始化任务数据、或做重 I/O。
-   - 如果 UI 只是创建列表和卡片，一般不是主因。
+## 4. 结果解读与常见优化方向
 
-3. 使用 `python3 -X importtime -c 'import main'`
-   - 把启动导入链完整记录下来。
-   - 再用排序脚本找出累计耗时最大的模块。
+完成测量后，建议按“结论对应动作”的方式整理结果。
 
-4. 对重模块做单独冷导入测试
-   - `modules.ECG_handler`
-   - `modules.gen_subtitles`
-   - `modules.twist_shape`
-   - `modules.dicom_to_imgs`
+### 4.1 导入链明显偏重
 
-5. 再测类实例化耗时
-   - 验证慢点是在模块顶层，还是在对象构造阶段。
+常见现象：
 
-6. 最后补充环境和打包因素判断
-   - Matplotlib 字体缓存
-   - 模型依赖是否在 import 时被拉起
-   - `PyInstaller --onefile` 是否额外放大启动时间
+- `import <入口模块>` 已经很慢。
+- `importtime` 前几名集中在少数业务模块或第三方依赖。
 
-## 5. 本次 RD-tools 的主要发现
+常见处理方式：
 
-这次分析里，结论比较明确：
+- 对低频功能实施懒加载。
+- 将重量级第三方依赖移出模块顶层。
+- 减少启动阶段统一注册的功能数量。
 
-- `import main` 明显慢，量级约十几秒
-- `import main_window` 只有不到一秒
-- 所以慢点主要不在窗口壳，而在入口模块的导入链
+### 4.2 初始化阶段明显偏重
 
-继续拆之后，主要瓶颈集中在少数任务模块：
+常见现象：
 
-1. `modules.ECG_handler`
-   - 顶层导入了 `matplotlib`、`pandas`、`scipy`
-   - 单独冷导入大约十秒级
-   - 其中 `matplotlib.font_manager` 非常重
+- 模块导入速度正常，但应用启动后仍有明显停顿。
+- 对象构造或初始化函数中存在磁盘扫描、网络访问、模型检测或缓存重建。
 
-2. `modules.gen_subtitles`
-   - 顶层尝试导入 `faster_whisper`
-   - 进一步带出 `ctranslate2`、`torch`、`transformers`
-   - 单独冷导入约一秒到数秒级，视环境而定
+常见处理方式：
 
-3. `modules.twist_shape`
-   - 顶层导入 `cv2`
-   - 有成本，但比前两项小
+- 将初始化逻辑拆分为“必要初始化”和“延后初始化”。
+- 避免在主窗口构造阶段执行大量 I/O。
+- 对可缓存结果建立稳定缓存，而不是每次启动重新生成。
 
-4. `modules.dicom_to_imgs`
-   - 顶层导入 `pydicom`、`PIL`、`numpy`
-   - 有成本，但不是当前最大头
+### 4.3 UI 构造明显偏重
 
-另外还发现一个环境问题：
+常见现象：
 
-- Matplotlib 当前缓存目录不可写
-- 导致启动阶段会在临时目录创建缓存，甚至重建字体缓存
-- 这会显著放大首次启动或冷启动时间
+- `QApplication` 或主窗口装配耗时明显。
+- 页面、卡片、表格或复杂控件在启动阶段全部同步创建。
 
-因此，本项目当前启动慢的主要原因不是“`modules` 文件多”，而是“少数重量级功能在程序启动时被统一提前导入”。
+常见处理方式：
 
-## 6. 常见解决方案
+- 将非首屏页面改为按需构造。
+- 推迟大数据量视图的初始化。
+- 将首屏必须内容与次要内容分批加载。
 
-### 6.1 优先做任务级懒加载
+### 4.4 打包与环境成本明显偏重
 
-这是当前项目最值得优先考虑的方案。
+常见现象：
 
-典型做法是：
+- 源码运行较快，打包后明显变慢。
+- 首次启动明显慢于再次启动。
+- 字体缓存、模型缓存或临时目录权限异常。
 
-- 任务描述里不直接保存类对象
-- 改为保存模块路径和类名
-- 用户真正点击执行某个任务时，再 `importlib.import_module()` 加载对应实现
+常见处理方式：
 
-这样做的好处是：
+- 检查缓存目录是否可写。
+- 调整打包方式，并验证 `--onefile` 是否引入额外启动成本。
+- 记录并清理启动阶段产生的环境警告和异常回退逻辑。
 
-- 不会因为一个很少使用的功能拖慢整个应用启动
-- 可以把优化集中在重模块，不需要平均对待所有模块
+## 5. 注意事项
 
-### 6.2 把重量级依赖移出模块顶层
+为确保分析结果可信，建议同时注意以下事项：
 
-即使做了任务级懒加载，有些模块内部仍然可以继续优化。
+- `importtime` 输出位于标准错误，未重定向时日志可能不完整。
+- `tail` 适合预览，不适合替代完整排序和正式结论。
+- 冷启动与热启动差异通常很大，应分别记录。
+- 顶层导入可能触发副作用，例如创建缓存、扫描模型、写入临时文件或打印警告。
+- GUI 项目的启动结论不应仅依赖主观体感，最好补充离屏测试或分段计时。
+- 源码分析结果不能直接替代打包分析结果，两者必须分别验证。
 
-例如：
+## 6. 以 RD-tools 为例
 
-- 把 `matplotlib.pyplot` 移到真正需要画图的方法里
-- 把 `faster_whisper` 移到真正开始转录时再导入
-- 把 `cv2` 移到真正进行图像变换时再导入
+本节用于说明上述方法如何落到当前项目。以下内容属于项目示例，不应直接视为其他项目的通用结论。
 
-这一步的目标是：
+### 6.1 分析对象
 
-- 把“模块可导入”和“功能真正执行”分开
-- 让模块注册阶段更轻
+本项目启动路径中，重点观察了以下部分：
 
-### 6.3 修正缓存目录和环境问题
+- 入口模块 `main.py`。
+- 主窗口相关模块 `main_window.py`。
+- 若干任务模块，例如 `modules.ECG_handler`、`modules.gen_subtitles`、`modules.twist_shape`、`modules.dicom_to_imgs`。
+- 打包方式与 Matplotlib 缓存环境。
 
-例如：
+### 6.2 实际观察
 
-- 为 Matplotlib 提供可写缓存目录
-- 检查 `MPLCONFIGDIR`
-- 避免每次启动都重建字体缓存
+按本文方法拆分后，得到的主要结论如下：
 
-这类问题不解决，代码已经优化后，仍然可能觉得冷启动偏慢。
+- `import main` 明显偏慢，量级约为十几秒。
+- `import main_window` 明显更快，不到一秒。
+- 因此，当前瓶颈主要位于入口模块导入链，而不是主窗口外壳本身。
 
-### 6.4 重新评估打包方式
+进一步拆分后，主要耗时集中在少数任务模块：
 
-如果桌面版本主要给自己长期使用，且特别关注启动速度，可以评估：
+- `modules.ECG_handler`
+  - 顶层导入了 `matplotlib`、`pandas`、`scipy`。
+  - 单独冷导入为十秒级。
+  - 其中 `matplotlib.font_manager` 是明显重项。
 
-- 是否一定要 `--onefile`
-- 是否改用 `--onedir`
+- `modules.gen_subtitles`
+  - 顶层会拉起 `faster_whisper`，并进一步带出 `ctranslate2`、`torch`、`transformers`。
+  - 单独冷导入通常为一秒到数秒级，受环境影响较大。
 
-`--onefile` 的优点是分发方便，但启动一般比 `--onedir` 更慢。
+- `modules.twist_shape`
+  - 顶层导入 `cv2`。
+  - 存在明显成本，但不是当前最大瓶颈。
 
-### 6.5 必要时把超重任务独立进程化
+- `modules.dicom_to_imgs`
+  - 顶层导入 `pydicom`、`PIL`、`numpy`。
+  - 存在成本，但低于前述主要重项。
 
-如果某些任务依赖栈特别重，而且与主程序生命周期并不强绑定，可以考虑：
+另外还观察到一个环境因素：
 
-- 主程序保持轻量
-- 真正运行任务时再启动子进程
+- Matplotlib 缓存目录不可写。
+- 启动阶段会回退到临时目录创建缓存，甚至重建字体缓存。
+- 该问题会显著放大首次启动和冷启动时间。
 
-这适合：
+### 6.3 对本项目的建议优先级
 
-- 模型类任务
-- 科学计算类任务
-- 媒体处理类任务
+基于当前分析结果，RD-tools 的优化优先级建议如下：
 
-但这一步复杂度更高，通常排在懒加载之后。
+1. 先将任务模块改为按需导入，避免在应用启动时统一导入全部任务实现。
+2. 再将模块内部的重量级依赖继续下沉，避免在模块顶层直接导入 `matplotlib`、`faster_whisper`、`cv2` 等依赖。
+3. 修复 Matplotlib 缓存目录问题，避免重复构建字体缓存。
+4. 如果发布版仍明显偏慢，再单独评估 `PyInstaller --onefile` 带来的启动成本。
 
-## 7. 注意事项
+对于当前项目，第一项通常最可能带来最明显的启动改善。
 
-### 7.1 `importtime` 输出在标准错误
+## 7. 建议的后续执行方式
 
-不要忘了用 `2>` 重定向，否则日志可能看起来不完整。
+如果后续再次出现启动耗时问题，建议固定执行以下流程：
 
-### 7.2 `tail -n 120` 只是快速预览
+1. 明确本次分析的测量口径。
+2. 记录冷启动、热启动、源码运行和打包运行的基线。
+3. 用分段计时判断慢点位于导入、初始化还是 UI 构造。
+4. 用 `importtime` 和单模块冷导入锁定重量级模块。
+5. 区分模块导入成本与对象构造成本。
+6. 记录环境异常、缓存问题和打包差异。
+7. 最后再决定优化方案与优先级。
 
-它适合“先扫一眼”，不适合正式判断。正式分析要看完整日志，并做排序汇总。
-
-### 7.3 冷启动和热启动结果会不同
-
-例如：
-
-- 字体缓存
-- Python 字节码缓存
-- 动态库缓存
-- 磁盘缓存
-
-所以建议至少区分：
-
-- 首次冷启动
-- 再次启动
-
-### 7.4 顶层 import 可能有副作用
-
-有些模块在 import 阶段就会：
-
-- 创建缓存
-- 检查环境
-- 扫描模型
-- 打印警告
-- 写临时文件
-
-所以分析时要留意，别把这些副作用误认为业务执行本身。
-
-### 7.5 GUI 项目最好补离屏测试
-
-有些环境下直接构造 `QApplication` 会受图形环境影响，建议用：
-
-```bash
-QT_QPA_PLATFORM=offscreen
-```
-
-这样更适合自动化测量。
-
-### 7.6 源码分析不等于打包分析
-
-源码下 `import main` 快，不代表打包后也快；反过来也一样。两者都要单独验证。
-
-## 8. 后续标准排查步骤
-
-后续如果再遇到“启动慢”问题，建议固定按下面流程执行：
-
-1. 运行 `profile_importtime main`
-   - 先拿到完整 import 日志。
-
-2. 运行 `summarize_importtime`
-   - 先找累计耗时最大的模块，不靠肉眼猜。
-
-3. 单独测试主窗口 import
-   - 判断问题在业务导入链，还是 UI 模块。
-
-4. 单独测试重模块冷导入
-   - 锁定最值得优化的 2 到 3 个模块。
-
-5. 测类实例化耗时
-   - 判断应该优先改顶层 import，还是改构造函数。
-
-6. 补充离屏 UI 测试
-   - 排除 `QApplication` 和页面装配带来的影响。
-
-7. 记录环境异常
-   - 例如缓存目录不可写、动态库警告、模型路径扫描等。
-
-8. 最后再决定方案优先级
-   - 先做懒加载
-   - 再做局部重依赖延迟导入
-   - 再处理缓存和打包问题
-
-## 9. 对当前项目的建议优先级
-
-基于本次分析，当前项目建议优先级如下：
-
-1. 先把任务模块改成按需导入
-   - 重点是 `ECG_handler`、`gen_subtitles`、`twist_shape`
-
-2. 再把模块内部的重依赖继续下沉
-   - 重点是 `matplotlib`、`faster_whisper`、`cv2`
-
-3. 修复 Matplotlib 缓存目录问题
-
-4. 如果发布版仍慢，再评估 `PyInstaller --onefile`
-
-这四步里，第一步最关键，也最可能带来最明显的启动改善。
+按上述顺序执行，可以显著降低误判概率，并提高后续优化工作的收益。
