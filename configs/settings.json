@@ -19,6 +19,19 @@
             "proxy_port": "8080"
         }
     },
+    "Task_Center": {
+        "task_order": [
+            "files-renamer",
+            "bilibili-export",
+            "subtitle-generation",
+            "mac-cleaner",
+            "merge-colors",
+            "split-colors",
+            "twist-images",
+            "ecg-handler",
+            "dicom-processing"
+        ]
+    },
     "Batch_Files": {
         "DicomToImage": {
             "log_folder_name": "dicom_handle_log",

@@ -17,6 +17,7 @@
 import json
 import os
 import shutil
+from copy import deepcopy
 from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
@@ -26,10 +27,22 @@ from PySide6.QtCore import QObject, Signal
 # =========================================================
 class AppSettings(QObject):
     changed_signal = Signal(str, str, object)
+    DEFAULT_TASK_ORDER = [
+        "files-renamer",
+        "bilibili-export",
+        "subtitle-generation",
+        "mac-cleaner",
+        "merge-colors",
+        "split-colors",
+        "twist-images",
+        "ecg-handler",
+        "dicom-processing",
+    ]
 
     def __init__(self):
         super().__init__()
         self._default_settings_json = {}
+        self._startup_warnings: list[str] = []
         """
             1. 定义「设置项变量名称」到设置路径的映射, 附加选项在value第一项(如果有)
             2. **_Settingmap 命名要与 json key 和 value 的 path[0] 一致
@@ -103,6 +116,9 @@ class AppSettings(QObject):
             "rename_recursive": ([True, False], "Batch_Files", "FilesRenamer", "recursive"),
             "rename_max_threads": ([1, 2, 4, 8], "Batch_Files", "FilesRenamer", "max_threads"),
         }
+        self.Task_Center_Settingmap = {
+            "task_order": ("Task_Center", "task_order"),
+        }
         # 在初始化时加载设置
         self.__settings_json = None
         self._load_settings()
@@ -158,7 +174,7 @@ class AppSettings(QObject):
         try:
             with open(default_settings_file, 'r', encoding='utf-8') as file:
                 self._default_settings_json = json.load(file)
-            with open(self.settings_file, 'r') as file:
+            with open(self.settings_file, 'r', encoding='utf-8') as file:
                 self.__settings_json = json.load(file)
         except Exception as e:
             print(f"From AppSettings:\n\t加载配置文件失败: {e}\n")
@@ -172,7 +188,10 @@ class AppSettings(QObject):
                     self._default_settings_json = self.__settings_json
 
         # 提取第一级键作为main_categories
-        self.__main_categories = list(self.__settings_json.keys())
+        self.__main_categories = list(dict.fromkeys([
+            *self.__settings_json.keys(),
+            *self._default_settings_json.keys(),
+        ]))
 
         # 将设置的json数据加载到具体的变量中
         for category in self.__main_categories:
@@ -183,6 +202,17 @@ class AppSettings(QObject):
                 setattr(self, name, value)
                 # 发送信号通知设置加载
                 self.changed_signal.emit(path[-2], path[-1], value)
+
+    def consume_startup_warnings(self):
+        warnings = list(self._startup_warnings)
+        self._startup_warnings.clear()
+        return warnings
+
+    def _record_startup_warning(self, message: str):
+        if message in self._startup_warnings:
+            return
+        print(f"From AppSettings:\n\tWarning: {message}\n")
+        self._startup_warnings.append(message)
 
     # 根据 category_name 动态获取对应的 Settingmap
     def get_setting_map(self, category_name: str):
@@ -201,6 +231,82 @@ class AppSettings(QObject):
 
     def get_main_categories(self):
         return self.__main_categories
+
+    def get_task_order(self, available_task_keys: list[str]):
+        available_keys = list(dict.fromkeys(
+            key for key in available_task_keys
+            if isinstance(key, str)
+        ))
+        available_key_set = set(available_keys)
+        configured_order = self._lookup_path(self.__settings_json, ("Task_Center", "task_order"))
+
+        if configured_order is None:
+            source_order = list(self.DEFAULT_TASK_ORDER)
+        elif not isinstance(configured_order, list):
+            self._record_startup_warning("Task_Center.task_order 配置非法，已回退到默认顺序。")
+            source_order = list(self.DEFAULT_TASK_ORDER)
+        else:
+            source_order = []
+            seen = set()
+            has_non_string = False
+            has_unknown = False
+            has_duplicate = False
+
+            # 配置里允许“部分覆盖默认顺序”，这里先把非法项清洗掉，再在后面补齐剩余任务。
+            for item in configured_order:
+                if not isinstance(item, str):
+                    has_non_string = True
+                    continue
+                if item in seen:
+                    has_duplicate = True
+                    continue
+
+                seen.add(item)
+                if item not in available_key_set:
+                    has_unknown = True
+                    continue
+
+                source_order.append(item)
+
+            if has_non_string or has_unknown or has_duplicate:
+                problems = []
+                if has_non_string:
+                    problems.append("非字符串项")
+                if has_unknown:
+                    problems.append("未知任务 key")
+                if has_duplicate:
+                    problems.append("重复 key")
+                self._record_startup_warning(
+                    f"Task_Center.task_order 配置包含{' / '.join(problems)}，已过滤非法项并补齐缺失任务。"
+                )
+
+        ordered_keys = []
+        seen = set()
+        for key in source_order:
+            if key not in available_key_set or key in seen:
+                continue
+            seen.add(key)
+            ordered_keys.append(key)
+
+        # 新版本新增的任务如果用户配置里还没出现，按代码里的可用顺序自动补到末尾，避免任务消失。
+        for key in available_keys:
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered_keys.append(key)
+
+        return ordered_keys
+
+    def save_task_order(self, task_keys: list[str]):
+        normalized_keys = []
+        seen = set()
+        for key in task_keys:
+            if not isinstance(key, str) or key in seen:
+                continue
+            seen.add(key)
+            normalized_keys.append(key)
+
+        return self.save_settings("task_order", normalized_keys)
 
     def get_setting_entries(self, category_name: str, group_name: str | None = None):
         entries = []
@@ -276,14 +382,24 @@ class AppSettings(QObject):
             d = d[key]
         return d
 
-    def _write_settings_file(self):
+    def _write_settings_file(self, settings_json: dict | None = None):
+        payload = self.__settings_json if settings_json is None else settings_json
         try:
             with open(self.settings_file, 'w', encoding='utf-8') as file:
-                json.dump(self.__settings_json, file, indent=4)
+                json.dump(payload, file, indent=4)
                 return True
         except Exception as e:
             print(f"From AppSettings:\n\t写入配置文件失败: {e}\n")
             return False
+
+    def _resolve_setting_path(self, name: str):
+        for category in self.__main_categories:
+            setting_map = self.get_setting_map(category)
+            options_path = setting_map.get(name)
+            if options_path:
+                _, path = self._extract_options_path(options_path)
+                return path
+        return None
 
     # 根据类名获取参数
     def get_class_params(self, class_name):
@@ -326,28 +442,28 @@ class AppSettings(QObject):
 
     # 保存设置到文件
     def save_settings(self, name: str, value):
-        # 查找设置对应的路径
-        path = None
-        for category in self.__main_categories:
-            setting_map = self.get_setting_map(category)
-            options_path = setting_map.get(name)
-            if options_path:
-                _, path = self._extract_options_path(options_path)
-                break
-        if path:
-            # 获取最后一级之前的dict对象
-            d = self.__settings_json
-            for key in path[:-1]:
-                if key not in d or not isinstance(d[key], dict):
-                    d[key] = {}
-                d = d[key]
-            # 设置最后一级的值
-            d[path[-1]] = value
-            print(f"From AppSettings:\n\tUpdating setting: {path} = {value}\n")
-        else:
+        path = self._resolve_setting_path(name)
+        if not path:
             print(f"From AppSettings:\n\tSetting '{name}' not found\n")
             return False
 
-        # 发送信号(类名,参数名和值), 通知设置修改
+        previous_value = self.get_value_from_path(path)
+        # 先在内存副本里改，再尝试落盘；只有写成功后才提交到真正的内存状态。
+        new_settings_json = deepcopy(self.__settings_json)
+        d = new_settings_json
+        for key in path[:-1]:
+            if key not in d or not isinstance(d[key], dict):
+                d[key] = {}
+            d = d[key]
+        d[path[-1]] = value
+        print(f"From AppSettings:\n\tUpdating setting: {path} = {value}\n")
+
+        if not self._write_settings_file(new_settings_json):
+            setattr(self, name, previous_value)
+            return False
+
+        # 到这里才真正提交：同步 JSON、属性值，并通知依赖方刷新。
+        self.__settings_json = new_settings_json
+        setattr(self, name, value)
         self.changed_signal.emit(path[-2], path[-1], value)
-        return self._write_settings_file()
+        return True

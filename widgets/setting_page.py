@@ -266,6 +266,26 @@ class SettingWindow(QWidget):
             task_items.append(SettingsNavItem(key=descriptor.key, title=descriptor.title, icon=descriptor.icon))
         self.task_view.set_nav_items(task_items)
 
+    def set_task_descriptors(self, task_descriptors: list[TaskDescriptor]):
+        current_task_key = None
+        current_item = self.task_view.nav_list.currentItem()
+        if current_item is not None:
+            current_task_key = current_item.data(Qt.UserRole)
+
+        self.task_descriptors = task_descriptors or []
+        self._task_descriptor_map = {descriptor.key: descriptor for descriptor in self.task_descriptors}
+        self._populate_navigation()
+
+        if self.panel_stack.currentWidget() is self.task_view:
+            if self.task_view.nav_list.count() == 0:
+                self.task_view.show_empty_state('暂无任务设置', '当前没有可映射到 Batch_Files 的任务配置。')
+                return
+
+            # 任务中心改顺序后，设置页尽量保持用户当前查看的任务不变。
+            if current_task_key is not None and self._select_nav_item(self.task_view, current_task_key):
+                return
+            self.task_view.ensure_selection()
+
     def _switch_panel(self, view: SettingsSplitView, key: str):
         self.panel_stack.setCurrentWidget(view)
         self.segmented_widget.setCurrentItem(key)
@@ -337,14 +357,7 @@ class SettingWindow(QWidget):
             return False
 
         self._switch_panel(self.task_view, 'tasks')
-        for index in range(self.task_view.nav_list.count()):
-            item = self.task_view.nav_list.item(index)
-            if item.data(Qt.UserRole) != task_key:
-                continue
-            self.task_view.nav_list.setCurrentRow(index)
-            return True
-
-        return False
+        return self._select_nav_item(self.task_view, task_key)
 
     def _build_setting_card(self, name: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon, parent=None):
         if options is not None:
@@ -369,7 +382,7 @@ class SettingWindow(QWidget):
             self.notification_requested.emit('error', '设置保存失败', f'未找到配置项: {name}')
             return
 
-        setattr(self.settings, name, value)
+        # 真实状态以 AppSettings.save_settings() 的提交结果为准，避免先改内存、后写文件失败留下脏值。
         if not self.settings.save_settings(name, value):
             self.notification_requested.emit('error', '设置保存失败', f'{self._humanize(name)} 无法写回配置文件。')
             return
@@ -380,6 +393,16 @@ class SettingWindow(QWidget):
     @staticmethod
     def _humanize(value: str) -> str:
         return humanize_setting_label(value)
+
+    @staticmethod
+    def _select_nav_item(view: SettingsSplitView, item_key: str) -> bool:
+        for index in range(view.nav_list.count()):
+            item = view.nav_list.item(index)
+            if item.data(Qt.UserRole) != item_key:
+                continue
+            view.nav_list.setCurrentRow(index)
+            return True
+        return False
 
 
 if __name__ == '__main__':

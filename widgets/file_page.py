@@ -9,6 +9,7 @@ from typing import Callable
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QFileDialog,
     QHBoxLayout,
@@ -39,8 +40,39 @@ from core import MessageLevel, TaskMessage, ensure_task_message
 from ui.task_descriptor import TaskDescriptor
 
 
+class ReorderableTaskListWidget(ListWidget):
+    order_changed = Signal(list)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setDragDropMode(QAbstractItemView.InternalMove)
+        self.setDefaultDropAction(Qt.MoveAction)
+
+    def current_task_order(self):
+        return [
+            self.item(index).data(Qt.UserRole)
+            for index in range(self.count())
+        ]
+
+    def dropEvent(self, event):
+        previous_order = self.current_task_order()
+        super().dropEvent(event)
+        if not event.isAccepted():
+            return
+
+        current_order = self.current_task_order()
+        # 只在顺序真的变化时通知上层，避免点击、取消拖拽也触发持久化。
+        if current_order != previous_order:
+            self.order_changed.emit(current_order)
+
+
 class FileWindow(QWidget):
     notification_requested = Signal(str, str, str)
+    task_order_changed = Signal(list)
 
     def __init__(self):
         super().__init__()
@@ -98,14 +130,15 @@ class FileWindow(QWidget):
         task_list_title = SubtitleLabel('任务列表', self.task_list_card)
         task_list_layout.addWidget(task_list_title)
 
-        task_list_hint = CaptionLabel('切换任务不会丢失各自日志，运行中的任务会在列表里标记。', self.task_list_card)
+        task_list_hint = CaptionLabel('按住后可直接拖拽调整显示顺序；切换任务不会丢失各自日志，运行中的任务会在列表里标记。', self.task_list_card)
         task_list_hint.setObjectName('SectionHint')
         task_list_hint.setWordWrap(True)
         task_list_layout.addWidget(task_list_hint)
 
-        self.task_list = ListWidget(self.task_list_card)
+        self.task_list = ReorderableTaskListWidget(self.task_list_card)
         self.task_list.setObjectName('TaskList')
         self.task_list.currentItemChanged.connect(self._on_task_changed)
+        self.task_list.order_changed.connect(self._on_task_order_changed)
         task_list_layout.addWidget(self.task_list, stretch=1)
         body_layout.addWidget(self.task_list_card)
 
@@ -286,6 +319,13 @@ class FileWindow(QWidget):
         self._current_task_key = current.data(Qt.UserRole)
         self._refresh_task_detail()
 
+    def _on_task_order_changed(self, ordered_keys: list[str]):
+        if ordered_keys:
+            # 拖拽后尽量保持当前任务选中，避免右侧详情无意义地跳到别的任务。
+            current_key = self._current_task_key or ordered_keys[0]
+            self._select_task_item(current_key)
+        self.task_order_changed.emit(ordered_keys)
+
     def _refresh_task_detail(self):
         descriptor = self.current_task_descriptor()
         if descriptor is None:
@@ -339,6 +379,38 @@ class FileWindow(QWidget):
         if not self._current_task_key:
             return None
         return self._task_descriptors.get(self._current_task_key)
+
+    def current_task_order(self):
+        return self.task_list.current_task_order()
+
+    def apply_task_order(self, ordered_keys: list[str]):
+        normalized_keys = [
+            key for key in ordered_keys
+            if key in self._task_items
+        ]
+        if not normalized_keys:
+            return
+
+        selected_key = self._current_task_key if self._current_task_key in normalized_keys else normalized_keys[0]
+        self.task_list.setUpdatesEnabled(False)
+        # 这里按目标行逐个搬移现有 item，而不是重建列表，避免打断现有选中态和运行状态标记。
+        for target_row, key in enumerate(normalized_keys):
+            item = self._task_items.get(key)
+            if item is None:
+                continue
+            current_row = self.task_list.row(item)
+            if current_row < 0 or current_row == target_row:
+                continue
+            moved_item = self.task_list.takeItem(current_row)
+            self.task_list.insertItem(target_row, moved_item)
+        self.task_list.setUpdatesEnabled(True)
+        self._select_task_item(selected_key)
+
+    def _select_task_item(self, task_key: str):
+        item = self._task_items.get(task_key)
+        if item is None:
+            return
+        self.task_list.setCurrentItem(item)
 
     def append_operation_log(self, task_key: str, message: TaskMessage | str):
         resolved_message = ensure_task_message(message)
@@ -560,7 +632,6 @@ class FileWindow(QWidget):
         }
 
 
-# ===========================调试用==============================
 def simple_main():
     app = QApplication(sys.argv)
     window = FileWindow()

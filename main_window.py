@@ -33,6 +33,7 @@ class MainWindow(FluentWindow):
     def __init__(self, settings: AppSettings, task_descriptors: list[TaskDescriptor] | None = None):
         super().__init__()
         self.settings = settings
+        self.task_descriptors = list(task_descriptors or [])
         self._theme_sync_timer = QTimer(self)
         self._theme_sync_timer.setInterval(SYSTEM_THEME_SYNC_INTERVAL_MS)
         self._theme_sync_timer.timeout.connect(self._sync_auto_theme)
@@ -42,7 +43,7 @@ class MainWindow(FluentWindow):
         self.resize(self.FALLBACK_WINDOW_SIZE)
         self.setMinimumSize(self.BASE_MINIMUM_SIZE)
 
-        self._init_interfaces(task_descriptors or [])
+        self._init_interfaces(self.task_descriptors)
         self._connect_signals()
         self._configure_theme_sync(self.settings.theme)
         self.switchTo(self.FileWindow)
@@ -63,6 +64,7 @@ class MainWindow(FluentWindow):
 
     def _connect_signals(self):
         self.FileWindow.notification_requested.connect(self.show_notification)
+        self.FileWindow.task_order_changed.connect(self._handle_task_order_change)
         self.SettingWindow.notification_requested.connect(self.show_notification)
         self.SettingWindow.theme_changed.connect(self.apply_theme)
 
@@ -102,6 +104,32 @@ class MainWindow(FluentWindow):
     def open_task_settings(self, task_key: str) -> bool:
         self.switchTo(self.SettingWindow)
         return self.SettingWindow.open_task_settings(task_key)
+
+    def _handle_task_order_change(self, ordered_keys: list[str]):
+        previous_order = [descriptor.key for descriptor in self.task_descriptors]
+        if ordered_keys == previous_order:
+            return
+
+        descriptor_map = {descriptor.key: descriptor for descriptor in self.task_descriptors}
+        reordered_descriptors = [
+            descriptor_map[key]
+            for key in ordered_keys
+            if key in descriptor_map
+        ]
+        if len(reordered_descriptors) != len(self.task_descriptors):
+            self.FileWindow.apply_task_order(previous_order)
+            self.show_notification('error', '任务顺序', '任务顺序同步失败：当前任务列表不完整。')
+            return
+
+        if not self.settings.save_task_order(ordered_keys):
+            # 配置写回失败时，界面必须和真实持久化状态保持一致，不能停留在“看起来成功”的顺序上。
+            self.FileWindow.apply_task_order(previous_order)
+            self.show_notification('error', '任务顺序', '任务顺序无法写回配置文件。')
+            return
+
+        self.task_descriptors = reordered_descriptors
+        # 设置页不提供拖拽，但要跟随同一份有序 descriptor 立即刷新导航顺序。
+        self.SettingWindow.set_task_descriptors(self.task_descriptors)
 
     def show_for_launch(self):
         self._apply_launch_geometry()

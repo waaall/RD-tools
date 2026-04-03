@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QThread, Qt, Signal
+from PySide6.QtCore import QThread, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import FluentIcon as FIF
 
@@ -173,6 +173,16 @@ def register_batch_operation(window: MainWindow, active_bindings: dict[str, Batc
     )
 
 
+def order_task_descriptors(settings: AppSettings, descriptors: list[TaskDescriptor]) -> list[TaskDescriptor]:
+    descriptor_map = {descriptor.key: descriptor for descriptor in descriptors}
+    ordered_keys = settings.get_task_order([descriptor.key for descriptor in descriptors])
+    return [
+        descriptor_map[key]
+        for key in ordered_keys
+        if key in descriptor_map
+    ]
+
+
 def build_task_descriptors() -> list[TaskDescriptor]:
     return [
         TaskDescriptor(
@@ -266,7 +276,7 @@ def main():
     app = QApplication(sys.argv)
     settings = AppSettings()
     settings.load_settings()
-    task_descriptors = build_task_descriptors()
+    task_descriptors = order_task_descriptors(settings, build_task_descriptors())
     apply_app_theme(settings.theme, app)
 
     window = MainWindow(settings, task_descriptors)
@@ -276,6 +286,8 @@ def main():
         register_batch_operation(window, active_bindings, descriptor)
 
     window.show_for_launch()
+    for warning in settings.consume_startup_warnings():
+        QTimer.singleShot(0, lambda message=warning: window.show_notification('warning', '任务顺序', message, duration=5000))
     sys.exit(app.exec())
 
 
