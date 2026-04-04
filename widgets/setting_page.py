@@ -299,8 +299,12 @@ class SettingWindow(QWidget):
         self.task_view.set_nav_items(task_items)
 
     def set_task_descriptors(self, task_descriptors: list[TaskDescriptor]):
+        current_general_key = None
         current_task_key = None
+        general_item = self.general_view.nav_list.currentItem()
         current_item = self.task_view.nav_list.currentItem()
+        if general_item is not None:
+            current_general_key = general_item.data(Qt.UserRole)
         if current_item is not None:
             current_task_key = current_item.data(Qt.UserRole)
 
@@ -318,6 +322,16 @@ class SettingWindow(QWidget):
             if current_task_key is not None and self._select_nav_item(self.task_view, current_task_key):
                 return
             self.task_view.ensure_selection()
+            return
+
+        if self.panel_stack.currentWidget() is self.general_view:
+            if self.general_view.nav_list.count() == 0:
+                self.general_view.show_empty_state('暂无通用设置', '当前未找到可显示的通用设置分类。')
+                return
+
+            if current_general_key is not None and self._select_nav_item(self.general_view, current_general_key):
+                return
+            self.general_view.ensure_selection()
 
     def _switch_panel(self, view: SettingsSplitView, key: str):
         self.panel_stack.setCurrentWidget(view)

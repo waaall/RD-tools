@@ -53,7 +53,7 @@ class SettingsSchemaTests(unittest.TestCase):
 
         settings = AppSettings()
 
-        self.assertEqual(settings.theme, "Dark")
+        self.assertEqual(settings.theme, "Auto")
         self.assertEqual(settings.get_group_values("Batch_Files", "files-renamer")["mode"], "prefix")
         issues = settings.get_config_health().issues
         self.assertTrue(any(issue.source == "用户配置" and issue.code == "parse_error" for issue in issues))
@@ -69,7 +69,7 @@ class SettingsSchemaTests(unittest.TestCase):
         finally:
             os.remove(snapshot_path)
 
-        self.assertEqual(settings.theme, "Dark")
+        self.assertEqual(settings.theme, "Auto")
         issues = settings.get_config_health().issues
         self.assertTrue(any(issue.source == "仓库默认配置" and issue.code == "parse_error" for issue in issues))
 

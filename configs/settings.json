@@ -2,7 +2,7 @@
     "General": {
         "language": "English",
         "Display": {
-            "theme": "Dark",
+            "theme": "Auto",
             "launch_maximized": true
         }
     },

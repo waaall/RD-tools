@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from core.settings_schema import build_default_settings_payload
@@ -68,4 +69,21 @@ class SettingPageTests(unittest.TestCase):
 
         self.assertEqual(payload, build_default_settings_payload())
         self.assertFalse(window.settings.get_config_health().has_issues)
+        window.deleteLater()
+
+    def test_set_task_descriptors_preserves_general_selection(self):
+        settings = AppSettings()
+        window = SettingWindow(settings, build_task_descriptors())
+        window._switch_panel(window.general_view, 'general')
+        window.general_view.ensure_selection()
+
+        before = window.general_view.nav_list.currentItem()
+        self.assertIsNotNone(before)
+        before_key = before.data(Qt.UserRole)
+
+        window.set_task_descriptors(build_task_descriptors())
+
+        after = window.general_view.nav_list.currentItem()
+        self.assertIsNotNone(after)
+        self.assertEqual(after.data(Qt.UserRole), before_key)
         window.deleteLater()

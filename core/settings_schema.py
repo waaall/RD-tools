@@ -108,7 +108,7 @@ def _build_general_settings() -> tuple[SettingFieldSpec, ...]:
             "theme",
             "General",
             "theme",
-            "Dark",
+            "Auto",
             str,
             group_key="Display",
             options=("Light", "Dark", "Auto"),
