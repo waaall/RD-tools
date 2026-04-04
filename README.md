@@ -15,7 +15,13 @@ Click the "Execute Task" button on that card.
 Monitor the dedicated log in the same card. A "SUCCESS! log file saved." message indicates completion.
 
 #### CLI Workflow
-Run the dicom_to_imgs.py script (located in the modules folder) directly in the terminal. This mirrors the UI logic.
+Run the task module through Python's module entrypoint:
+
+```bash
+python -m modules.dicom_to_imgs
+```
+
+This CLI path uses the same user settings file as the GUI and follows the same parameter assembly logic.
 
 Customization: If your DICOM file structure differs from the assumed hierarchy, rewrite the main function in dicom_to_imgs.py by leveraging the DicomToImage class and base functions in file_basic.py to tailor processing for your specific structure.
 
@@ -101,5 +107,13 @@ NOTICE: if you change the code, maybe have errors when you running `git pull` co
 ```bash
 python main.py
 ```
+
+Run a single task from terminal with:
+
+```bash
+python -m modules.gen_subtitles
+```
+
+GUI and CLI both read the same user settings from `~/Develop/RD-tools-configs/settings.json`.
 
 For more details, please refer to the Help window within the app.

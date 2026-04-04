@@ -324,13 +324,14 @@ class ExampleHandler(FilesBasic):
 - 需要先聚合后输出
 - 输入不是单文件，而是一组相关文件
 
-### 6.3 在 `main.py` 注册任务
+### 6.3 注册任务
 
 新增任务必须：
 
-1. 在 `build_task_descriptors()` 中增加 `TaskDescriptor`
-2. 补齐 `module_path`、`class_name`、`settings_group`
-3. 补齐标题、描述、图标和默认参数
+1. 在 `core/task_registry.py` 中增加 `TaskSpec`
+2. 补齐 `task_key`、`module_path`、`class_name`、标题、描述和默认参数
+3. 在 `ui/task_ui_registry.py` 中补齐该任务的图标元数据
+4. 如果模块需要终端入口，在 `if __name__ == '__main__':` 里委托给 `core.task_cli.run_task_cli()`
 
 当前不再要求在 `main.py` 顶层导入任务类；任务类由运行时懒加载机制按需解析。详细参考 `docs/dev/lazy-load-design.md`。
 
@@ -338,16 +339,18 @@ class ExampleHandler(FilesBasic):
 
 配置项的接入顺序：
 
-1. `configs/settings.json`
-2. `modules/app_settings.py`
-3. `widgets/setting_page.py`
-4. 任务类 `__init__()` 参数
+1. 在 `core/task_registry.py` 里的 `TaskSpec.settings` 新增任务设置 schema
+2. 确保字段默认值、选项和 `__init__()` 参数名一致
+3. 打开设置页验证字段是否自动生成
+4. 运行 schema 快照测试，确认 `configs/settings.json` 与生成结果一致
 
 要求：
 
-- 设置项名和类参数名保持一致
+- `Batch_Files` 下的任务分组使用稳定 `task_key`
+- 设置项名和任务类 `__init__()` 参数名保持一致
 - 默认值只保留一份主定义
 - 配置读写仍统一走 `AppSettings`，不要自己再做一套配置系统
+- GUI 和 CLI 都通过 `core.task_params.build_task_params()` 组装参数
 - 当前正式语义是：修改设置只影响下次执行，不再实时推送到正在运行的任务实例
 
 ## 7. 代码编写规范

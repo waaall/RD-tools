@@ -11,12 +11,9 @@
 """
 # =========================用到的库==========================
 import os
-import sys
 import shutil
-import json
 from pathlib import Path
-from typing import List, Optional
-from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 _WHISPER_MODEL_CLASS = None
 _WHISPER_IMPORT_FAILED = False
@@ -38,9 +35,6 @@ def _get_whisper_model_class():
     _WHISPER_MODEL_CLASS = WhisperModel
     return _WHISPER_MODEL_CLASS
 
-# 获取当前文件所在目录,并加入系统环境变量(临时)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
 from core import MessageLevel
 
@@ -106,8 +100,7 @@ class GenSubtitles(FilesBasic):
         """
         验证模型路径的有效性, 按以下优先级：
         1. 参数传入的路径
-        2. 配置文件中的路径
-        3. 默认的$HOME路径
+        2. 默认的$HOME路径
         如果都无效, 返回None
         """
         # 1. 检查用户指定的路径
@@ -115,13 +108,7 @@ class GenSubtitles(FilesBasic):
             self.send_message(f"使用用户指定的模型路径: {self.model_path}", level=MessageLevel.INFO)
             return self.model_path
 
-        # 2. 检查配置文件中的路径
-        config_model_path = self._get_path_from_config()
-        if config_model_path and (os.path.isfile(config_model_path) or os.path.isdir(config_model_path)):
-            self.send_message(f"使用配置文件中的模型路径: {config_model_path}", level=MessageLevel.INFO)
-            return config_model_path
-
-        # 3. 检查默认路径
+        # 2. 检查默认路径
         default_model_path = os.path.join(self.user_home_path,
                                           "Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin")
         if os.path.isfile(default_model_path) or os.path.isdir(default_model_path):
@@ -131,19 +118,6 @@ class GenSubtitles(FilesBasic):
         # 所有路径都无效
         self.send_message("所有可能的模型路径都无效", level=MessageLevel.ERROR)
         return None
-
-    def _get_path_from_config(self) -> str:
-        """从配置文件中获取模型路径"""
-        try:
-            config_file = os.path.join(os.path.dirname(current_dir), "configs", "settings.json")
-            if os.path.exists(config_file):
-                with open(config_file, 'r') as f:
-                    config = json.load(f)
-                    if "Batch_Files" in config and "GenSubtitles" in config["Batch_Files"]:
-                        return config["Batch_Files"]["GenSubtitles"].get("model_path", "")
-        except Exception as e:
-            self.send_message(f"读取配置文件失败: {e}", level=MessageLevel.ERROR)
-        return ""
 
     def single_file_handler(self, abs_input_path: str, abs_outfolder_path: str):
         """处理单个文件: 提取音频、生成字幕"""
@@ -325,40 +299,7 @@ class GenSubtitles(FilesBasic):
         return f"{hours:02d}:{minutes:02d}:{int(seconds):02d},{milliseconds:03d}"
 
 
-# =====================main(单独执行时使用)=====================
-def main():
-    # 获取用户输入的路径
-    input_path = input("请复制实验文件夹所在目录的绝对路径(若Python代码在同一目录, 请直接按Enter): \n")
-
-    # 判断用户是否直接按Enter, 设置为当前工作目录
-    if not input_path:
-        work_folder = os.getcwd()
-    elif os.path.isdir(input_path):
-        work_folder = input_path
-
-    subtitles_generator = GenSubtitles()
-    subtitles_generator.set_work_folder(work_folder)
-    possble_dirs = subtitles_generator.possble_dirs
-
-    # 给用户显示, 请用户输入index
-    number = len(possble_dirs)
-    subtitles_generator.send_message('\n')
-    for i in range(number):
-        print(f"{i}: {possble_dirs[i]}")
-    user_input = input("\n请选择要处理的序号(用空格分隔多个序号): \n")
-
-    # 解析用户输入
-    try:
-        indices = user_input.split()
-        index_list = [int(index) for index in indices]
-    except ValueError:
-        subtitles_generator.send_message("输入Error, 必须输入数字")
-
-    RESULT = subtitles_generator.selected_dirs_handler(index_list)
-    if not RESULT:
-        subtitles_generator.send_message("输入数字不在提供范围, 请重新运行")
-
-
-# =========================调试用============================
 if __name__ == '__main__':
-    main()
+    from core.task_cli import run_task_cli
+
+    raise SystemExit(run_task_cli('subtitle-generation', operation_cls=GenSubtitles))

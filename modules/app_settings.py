@@ -1,236 +1,76 @@
-"""
-    ==========================README===========================
-    create date:    20240828
-    change date:    20240902
-    creator:        zhengxu
-    function:       设置参数的实时修改与保存
+from __future__ import annotations
 
-    version:        beta 2.0
-    updates:        提升了模块化
-
-    details:
-                    1. 「设置项变量名称」要唯一,
-                    2. 参数path[-1]的名字要与对应接收类的参数名一致
-                    3. 参数path[-2]的名字要与对应接收类的类名一致
-                    4. 增加设置**需要在 settings.json 和 AppSettings类中增加 **_Settingmap
-"""
 import json
 import os
-import shutil
 from copy import deepcopy
-from pathlib import Path
+
 from PySide6.QtCore import QObject, Signal
 
+from core.config_health import ConfigHealth, ConfigHealthIssue
+from core.settings_schema import (
+    SettingFieldSpec,
+    build_default_settings_payload,
+    get_setting_field_spec_map,
+    get_setting_field_specs,
+)
+from core.task_registry import get_task_specs
 
-# =========================================================
-# =======               软件设置参数类              =========
-# =========================================================
+
 class AppSettings(QObject):
     changed_signal = Signal(str, str, object)
-    DEFAULT_TASK_ORDER = [
-        "files-renamer",
-        "bilibili-export",
-        "subtitle-generation",
-        "mac-cleaner",
-        "merge-colors",
-        "split-colors",
-        "twist-images",
-        "ecg-handler",
-        "dicom-processing",
-    ]
+    DEFAULT_TASK_ORDER = [spec.key for spec in get_task_specs()]
 
     def __init__(self):
         super().__init__()
-        self._default_settings_json = {}
         self._startup_warnings: list[str] = []
-        """
-            1. 定义「设置项变量名称」到设置路径的映射, 附加选项在value第一项(如果有)
-            2. **_Settingmap 命名要与 json key 和 value 的 path[0] 一致
-            3. 如果是类相关的设置, 要与类名一致和对应的变量名一致，如"DicomToImage", "fps"
-        """
-        self.General_Settingmap = {
-            "language": (["English", "French", "Spanish"], "General", "language"),
-            "launch_maximized": ([True, False], "General", "Display", "launch_maximized"),
-            "theme": (["Light", "Dark", "Auto"], "General", "Display", "theme"),
-        }
-        self.Network_Settingmap = {
-            "serial_baud_rate": ([800, 1200, 2400, 4800, 9600, 14400, 19200, 38400],
-                                 "Network", "Serial", "baud_rate"),
-            "serial_data_bits": ([4, 8], "Network", "Serial", "data_bits"),
-            "serial_stop_bits": ([1, 2, 4], "Network", "Serial", "stop_bits"),
-            "serial_parity": (["None", "Even", "Odd"], "Network", "Serial", "parity"),
-            "use_proxy": ("Network", "Internet", "use_proxy"),
-            "proxy_address": ("Network", "Internet", "proxy_address"),
-            "proxy_port": ("Network", "Internet", "proxy_port")
-        }
-        self.Batch_Files_Settingmap = {
-            "dicom_log_folder_name": ("Batch_Files", "DicomToImage", "log_folder_name"),
-            "dicom_fps": ([10, 20, 30], "Batch_Files", "DicomToImage", "fps"),
-            "dicom_frame_dpi": ([100, 200, 400, 800], "Batch_Files", "DicomToImage", "frame_dpi"),
-            "dicom_out_dir_prefix": ("Batch_Files", "DicomToImage", "out_dir_prefix"),
-            "bili_log_folder_name": ("Batch_Files", "BiliVideos", "log_folder_name"),
-            "bili_out_dir_prefix": ("Batch_Files", "BiliVideos", "out_dir_prefix"),
-            "bili_add_group_title": ([True, False], "Batch_Files", "BiliVideos", "AddGroupTitle"),
-            "bili_group_title_max_length": ([5, 10, 15, 20], "Batch_Files", "BiliVideos", "GroupTitleMaxLength"),
-            "mergecolor_log_folder_name": ("Batch_Files", "MergeColors", "log_folder_name"),
-            "mergecolor_out_dir_prefix": ("Batch_Files", "MergeColors", "out_dir_prefix"),
-            "gen_subtitle_log_folder_name": ("Batch_Files", "GenSubtitles", "log_folder_name"),
-            "gen_subtitle_model_path": ("Batch_Files", "GenSubtitles", "model_path"),
-            "gen_subtitle_parallel": ([True, False], "Batch_Files", "GenSubtitles", "parallel"),
-            "ecg_log_folder_name": ("Batch_Files", "ECGHandler", "log_folder_name"),
-            "ecg_sampling_rate": ([100, 200, 500, 1000, 2000],
-                                  "Batch_Files", "ECGHandler", "sampling_rate"),
-            "ecg_parallel": ([True, False],
-                             "Batch_Files", "ECGHandler", "parallel"),
-            "ecg_out_dir_prefix": ("Batch_Files", "ECGHandler", "out_dir_prefix"),
-            "ecg_filter_low_cut": ([0.1, 0.5, 0.67, 0.8, 1.0, 2.0],
-                                   "Batch_Files", "ECGHandler", "filter_low_cut"),
-            "ecg_filter_high_cut": ([5.0, 15.0, 30.0, 50.0, 100.0],
-                                    "Batch_Files", "ECGHandler", "filter_high_cut"),
-            "ecg_filter_order": ([1, 2, 4],
-                                 "Batch_Files", "ECGHandler", "filter_order"),
-            "ecg_drop_raw_zero": ([True, False],
-                                  "Batch_Files", "ECGHandler", "drop_raw_zero"),
-            "ecg_trim_raw_data": ([True, False], "Batch_Files", "ECGHandler", "trim_raw_data"),
-            "ecg_trim_filtered_data": ([True, False],
-                                       "Batch_Files", "ECGHandler", "trim_filtered_data"),
-            "ecg_trim_percentage": ([5.0, 6.0, 8.0, 10.0, 15.0, 20.0],
-                                    "Batch_Files", "ECGHandler", "trim_percentage"),
-            "ecg_time_range_short": ([1.0, 2.0, 3.0, 4.0],
-                                     "Batch_Files", "ECGHandler", "time_range_short"),
-            "ecg_time_range_medium": ([10.0, 15.0, 20.0, 30.0],
-                                      "Batch_Files", "ECGHandler", "time_range_medium"),
-            "rename_log_folder_name": ("Batch_Files", "FilesRenamer", "log_folder_name"),
-            "rename_mode": (
-                ["prefix", "all", "body", "between"],
-                "Batch_Files",
-                "FilesRenamer",
-                "mode",
-            ),
-            "rename_pattern": ("Batch_Files", "FilesRenamer", "pattern"),
-            "rename_start_pattern": ("Batch_Files", "FilesRenamer", "start_pattern"),
-            "rename_end_pattern": ("Batch_Files", "FilesRenamer", "end_pattern"),
-            "rename_replace_with": ("Batch_Files", "FilesRenamer", "replace_with"),
-            "rename_include_extension": ([True, False], "Batch_Files", "FilesRenamer", "include_extension"),
-            "rename_case_sensitive": ([True, False], "Batch_Files", "FilesRenamer", "case_sensitive"),
-            "rename_recursive": ([True, False], "Batch_Files", "FilesRenamer", "recursive"),
-            "rename_max_threads": ([1, 2, 4, 8], "Batch_Files", "FilesRenamer", "max_threads"),
-        }
-        self.Task_Center_Settingmap = {
-            "task_order": ("Task_Center", "task_order"),
-        }
-        # 在初始化时加载设置
-        self.__settings_json = None
-        self._load_settings()
+        self._config_issues: list[ConfigHealthIssue] = []
+        self._field_specs: tuple[SettingFieldSpec, ...] = ()
+        self._field_spec_by_id: dict[str, SettingFieldSpec] = {}
+        self._main_categories: list[str] = []
+        self.__settings_json: dict[str, object] = {}
+        self.default_settings_file = self._resolve_default_settings_file()
+        self.settings_file = self._resolve_user_settings_file()
+        self.load_settings()
 
-    # 加载设置到成员变量
-    def _load_settings(self):
-        """
-        加载设置到成员变量，优先从用户目录下的配置文件加载，
-        如果不存在则从项目配置目录加载，并创建用户目录下的配置文件
-        """
-        # 获取项目根目录
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        default_settings_file = os.path.join(base_dir, 'configs', 'settings.json')
+    def load_settings(self):
+        self._field_specs = get_setting_field_specs()
+        self._field_spec_by_id = get_setting_field_spec_map()
+        self._config_issues = []
 
-        # 用户目录下的配置文件路径
-        user_home = os.environ.get("HOME", "")
-        if not user_home and os.name == 'nt':  # Windows系统
-            user_home = os.environ.get("USERPROFILE", "")
+        default_payload = build_default_settings_payload()
+        raw_snapshot = self._read_json_file(self.default_settings_file, source='仓库默认配置', recoverable=False)
+        if raw_snapshot is not None and raw_snapshot != default_payload:
+            self._record_config_issue(
+                source='仓库默认配置',
+                code='snapshot_mismatch',
+                message='configs/settings.json 与 schema 默认配置不一致，运行时已使用 schema 默认值。',
+                recoverable=False,
+            )
 
-        user_config_dir = os.path.join(user_home, "Develop", "RD-tools-configs")
-        user_settings_file = os.path.join(user_config_dir, "settings.json")
+        self._ensure_user_config_parent()
+        if not os.path.exists(self.settings_file):
+            self._write_settings_file(default_payload, target_path=self.settings_file)
 
-        # 检查用户配置目录是否存在，不存在则创建
-        if not os.path.exists(user_config_dir):
-            try:
-                os.makedirs(user_config_dir, exist_ok=True)
-                print(f"From AppSettings:\n\t创建用户配置目录: {user_config_dir}\n")
-            except Exception as e:
-                print(f"From AppSettings:\n\t创建用户配置目录失败: {e}\n")
-                # 如果创建失败，使用默认配置文件
-                self.settings_file = default_settings_file
+        raw_user_settings = self._read_json_file(self.settings_file, source='用户配置', recoverable=True)
+        effective_settings = deepcopy(default_payload)
+        if raw_user_settings is not None:
+            self._merge_user_settings(raw_user_settings, effective_settings)
 
-        # 如果用户配置文件不存在，但目录存在，则拷贝默认配置文件
-        if not os.path.exists(user_settings_file) and os.path.exists(user_config_dir):
-            try:
-                shutil.copy2(default_settings_file, user_settings_file)
-                print(f"From AppSettings:\n\t拷贝默认配置文件到用户目录: {user_settings_file}\n")
-                self.settings_file = user_settings_file
-            except Exception as e:
-                print(f"From AppSettings:\n\t拷贝配置文件失败: {e}\n")
-                # 如果拷贝失败，使用默认配置文件
-                self.settings_file = default_settings_file
-        elif os.path.exists(user_settings_file):
-            # 用户配置文件存在，使用用户配置文件
-            self.settings_file = user_settings_file
-            print(f"From AppSettings:\n\t使用用户配置文件: {user_settings_file}\n")
-        else:
-            # 其他情况，使用默认配置文件
-            self.settings_file = default_settings_file
-            print(f"From AppSettings:\n\t使用默认配置文件: {default_settings_file}\n")
-
-        # 打开文件加载json数据
-        try:
-            with open(default_settings_file, 'r', encoding='utf-8') as file:
-                self._default_settings_json = json.load(file)
-            with open(self.settings_file, 'r', encoding='utf-8') as file:
-                self.__settings_json = json.load(file)
-        except Exception as e:
-            print(f"From AppSettings:\n\t加载配置文件失败: {e}\n")
-            # 如果加载失败，尝试加载默认配置文件
-            if self.settings_file != default_settings_file:
-                print("From AppSettings:\n\t尝试加载默认配置文件\n")
-                self.settings_file = default_settings_file
-                with open(self.settings_file, 'r', encoding='utf-8') as file:
-                    self.__settings_json = json.load(file)
-                if not self._default_settings_json:
-                    self._default_settings_json = self.__settings_json
-
-        # 提取第一级键作为main_categories
-        self.__main_categories = list(dict.fromkeys([
-            *self.__settings_json.keys(),
-            *self._default_settings_json.keys(),
-        ]))
-
-        # 将设置的json数据加载到具体的变量中
-        for category in self.__main_categories:
-            setting_map = self.get_setting_map(category)
-            for name, options_path in setting_map.items():
-                _, path = self._extract_options_path(options_path)
-                value = self.get_value_from_path(path)
-                setattr(self, name, value)
-                # 发送信号通知设置加载
-                self.changed_signal.emit(path[-2], path[-1], value)
+        self.__settings_json = effective_settings
+        self._main_categories = list(self.__settings_json.keys())
+        self._sync_attributes_from_payload()
+        return True
 
     def consume_startup_warnings(self):
         warnings = list(self._startup_warnings)
         self._startup_warnings.clear()
         return warnings
 
-    def _record_startup_warning(self, message: str):
-        if message in self._startup_warnings:
-            return
-        print(f"From AppSettings:\n\tWarning: {message}\n")
-        self._startup_warnings.append(message)
-
-    # 根据 category_name 动态获取对应的 Settingmap
-    def get_setting_map(self, category_name: str):
-        setting_map_name = f"{category_name}_Settingmap"
-        return getattr(self, setting_map_name, {})
-
-    # 从 options_path 中提取 path 和 options
-    def _extract_options_path(self, options_path: str):
-        if isinstance(options_path[0], list):
-            options = options_path[0]
-            path = options_path[1:]
-        else:
-            options = None
-            path = options_path
-        return options, path
+    def get_config_health(self) -> ConfigHealth:
+        return ConfigHealth(tuple(self._config_issues))
 
     def get_main_categories(self):
-        return self.__main_categories
+        return list(self._main_categories)
 
     def get_task_order(self, available_task_keys: list[str]):
         available_keys = list(dict.fromkeys(
@@ -238,57 +78,16 @@ class AppSettings(QObject):
             if isinstance(key, str)
         ))
         available_key_set = set(available_keys)
-        configured_order = self._lookup_path(self.__settings_json, ("Task_Center", "task_order"))
-
-        if configured_order is None:
-            source_order = list(self.DEFAULT_TASK_ORDER)
-        elif not isinstance(configured_order, list):
-            self._record_startup_warning("Task_Center.task_order 配置非法，已回退到默认顺序。")
-            source_order = list(self.DEFAULT_TASK_ORDER)
-        else:
-            source_order = []
-            seen = set()
-            has_non_string = False
-            has_unknown = False
-            has_duplicate = False
-
-            # 配置里允许“部分覆盖默认顺序”，这里先把非法项清洗掉，再在后面补齐剩余任务。
-            for item in configured_order:
-                if not isinstance(item, str):
-                    has_non_string = True
-                    continue
-                if item in seen:
-                    has_duplicate = True
-                    continue
-
-                seen.add(item)
-                if item not in available_key_set:
-                    has_unknown = True
-                    continue
-
-                source_order.append(item)
-
-            if has_non_string or has_unknown or has_duplicate:
-                problems = []
-                if has_non_string:
-                    problems.append("非字符串项")
-                if has_unknown:
-                    problems.append("未知任务 key")
-                if has_duplicate:
-                    problems.append("重复 key")
-                self._record_startup_warning(
-                    f"Task_Center.task_order 配置包含{' / '.join(problems)}，已过滤非法项并补齐缺失任务。"
-                )
+        configured_order = getattr(self, 'task_order', []) or []
 
         ordered_keys = []
         seen = set()
-        for key in source_order:
+        for key in configured_order:
             if key not in available_key_set or key in seen:
                 continue
             seen.add(key)
             ordered_keys.append(key)
 
-        # 新版本新增的任务如果用户配置里还没出现，按代码里的可用顺序自动补到末尾，避免任务消失。
         for key in available_keys:
             if key in seen:
                 continue
@@ -305,25 +104,23 @@ class AppSettings(QObject):
                 continue
             seen.add(key)
             normalized_keys.append(key)
-
-        return self.save_settings("task_order", normalized_keys)
+        return self.save_settings('task_order', normalized_keys)
 
     def get_setting_entries(self, category_name: str, group_name: str | None = None):
         entries = []
-        setting_map = self.get_setting_map(category_name)
-        for name, options_path in setting_map.items():
-            options, path = self._extract_options_path(options_path)
-            if group_name is not None and (len(path) < 2 or path[1] != group_name):
+        for spec in self._field_specs:
+            if not spec.visible or spec.category != category_name:
                 continue
-
-            value = getattr(self, name, self.get_value_from_path(path))
+            if group_name is not None and spec.group_key != group_name:
+                continue
             entries.append({
-                'name': name,
-                'options': options,
-                'path': path,
-                'value': value,
+                'name': spec.field_id,
+                'options': list(spec.options) if spec.options is not None else None,
+                'path': spec.path,
+                'value': getattr(self, spec.field_id, deepcopy(spec.default)),
+                'label': spec.label,
+                'description': spec.description,
             })
-
         return entries
 
     def get_setting_groups(self, category_name: str):
@@ -333,137 +130,404 @@ class AppSettings(QObject):
             path = entry['path']
             if len(path) < 2:
                 continue
-
             group_name = path[1]
             if group_name in seen:
                 continue
-
             seen.add(group_name)
             groups.append(group_name)
-
         return groups
 
+    def get_group_values(self, category_name: str, group_name: str) -> dict[str, object]:
+        values: dict[str, object] = {}
+        for spec in self._field_specs:
+            if spec.category != category_name or spec.group_key != group_name:
+                continue
+            value = getattr(self, spec.field_id, deepcopy(spec.default))
+            if value is None:
+                continue
+            values[spec.json_key] = value
+        return values
+
     def get_value_from_path(self, path):
-        d = self._lookup_path(self.__settings_json, path)
-        if d is None:
-            d = self._lookup_path(self._default_settings_json, path)
+        value = self._lookup_path(self.__settings_json, path)
+        return deepcopy(value)
 
-        # 确保返回正确的数据类型
-        if d is None:
-            return None
-
-        # 处理布尔值
-        if isinstance(d, str) and d.lower() in ('true', 'false'):
-            return d.lower() == 'true'
-
-        # 处理数字
-        if isinstance(d, str):
-            # 尝试转换为整数
-            try:
-                if d.isdigit():
-                    return int(d)
-            except (ValueError, AttributeError):
-                pass
-
-            # 尝试转换为浮点数
-            try:
-                return float(d)
-            except (ValueError, AttributeError):
-                pass
-
-        return d
-
-    @staticmethod
-    def _lookup_path(source: dict | None, path):
-        d = source
-        for key in path:
-            if not isinstance(d, dict) or key not in d:
-                return None
-            d = d[key]
-        return d
-
-    def _write_settings_file(self, settings_json: dict | None = None):
-        payload = self.__settings_json if settings_json is None else settings_json
-        try:
-            with open(self.settings_file, 'w', encoding='utf-8') as file:
-                json.dump(payload, file, indent=4)
-                return True
-        except Exception as e:
-            print(f"From AppSettings:\n\t写入配置文件失败: {e}\n")
-            return False
-
-    def _resolve_setting_path(self, name: str):
-        for category in self.__main_categories:
-            setting_map = self.get_setting_map(category)
-            options_path = setting_map.get(name)
-            if options_path:
-                _, path = self._extract_options_path(options_path)
-                return path
-        return None
-
-    # 根据类名获取参数
-    def get_class_params(self, class_name):
-        """
-        根据类名查找对应的参数，返回可用于初始化该类的参数字典
-        Args:
-            class_name: 类的名称，如'GenSubtitles'
-        Returns:
-            dict: 包含类参数的字典，可直接用于类的初始化
-        """
-        # 确保设置已加载
-        if self.__settings_json is None:
-            self._load_settings()
-
-        # 存储找到的参数
-        params = {}
-
-        # 遍历所有设置映射
-        for category in self.__main_categories:
-            setting_map = self.get_setting_map(category)
-            # 查找与指定类相关的设置
-            for name, options_path in setting_map.items():
-                _, path = self._extract_options_path(options_path)
-                # 检查路径中是否包含类名
-                if len(path) >= 2 and path[1] == class_name:
-                    # 获取参数名和值
-                    param_name = path[-1]
-                    param_value = self.get_value_from_path(path)
-                    if param_value is None:
-                        continue
-                    params[param_name] = param_value
-        return params
-
-    # 手动加载设置
-    def load_settings(self):
-        """手动加载设置文件，用于在初始化时不立即加载的情况"""
-        if self.__settings_json is None:
-            self._load_settings()
-        return True
-
-    # 保存设置到文件
     def save_settings(self, name: str, value):
-        path = self._resolve_setting_path(name)
-        if not path:
+        spec = self._field_spec_by_id.get(name)
+        if spec is None:
             print(f"From AppSettings:\n\tSetting '{name}' not found\n")
             return False
 
-        previous_value = self.get_value_from_path(path)
-        # 先在内存副本里改，再尝试落盘；只有写成功后才提交到真正的内存状态。
-        new_settings_json = deepcopy(self.__settings_json)
-        d = new_settings_json
-        for key in path[:-1]:
-            if key not in d or not isinstance(d[key], dict):
-                d[key] = {}
-            d = d[key]
-        d[path[-1]] = value
-        print(f"From AppSettings:\n\tUpdating setting: {path} = {value}\n")
-
-        if not self._write_settings_file(new_settings_json):
-            setattr(self, name, previous_value)
+        try:
+            normalized_value = self._normalize_field_value(
+                spec,
+                value,
+                source='用户配置',
+                record_issue=False,
+                record_warning=False,
+            )
+        except ValueError as exc:
+            print(f"From AppSettings:\n\tSetting '{name}' invalid: {exc}\n")
             return False
 
-        # 到这里才真正提交：同步 JSON、属性值，并通知依赖方刷新。
-        self.__settings_json = new_settings_json
-        setattr(self, name, value)
-        self.changed_signal.emit(path[-2], path[-1], value)
+        new_settings_json = deepcopy(self.__settings_json)
+        self._set_value_at_path(new_settings_json, spec.path, normalized_value)
+
+        if not self._write_settings_file(new_settings_json, target_path=self.settings_file):
+            return False
+
+        self.load_settings()
         return True
+
+    def reset_user_settings_to_defaults(self):
+        default_payload = build_default_settings_payload()
+        if not self._write_settings_file(default_payload, target_path=self.settings_file):
+            return False
+        self.load_settings()
+        return True
+
+    def _sync_attributes_from_payload(self):
+        for spec in self._field_specs:
+            value = self.get_value_from_path(spec.path)
+            setattr(self, spec.field_id, value)
+            parent_key = spec.path[-2] if len(spec.path) >= 2 else spec.category
+            self.changed_signal.emit(parent_key, spec.json_key, value)
+
+    def _merge_user_settings(self, raw_user_settings: dict, effective_settings: dict):
+        schema_tree = self._build_schema_tree()
+        self._merge_schema_node(
+            schema_node=schema_tree,
+            raw_node=raw_user_settings,
+            effective_node=effective_settings,
+            current_path=(),
+            source='用户配置',
+        )
+
+    def _merge_schema_node(self, schema_node: dict, raw_node, effective_node: dict, current_path: tuple[str, ...], source: str):
+        if not isinstance(raw_node, dict):
+            self._record_config_issue(
+                source=source,
+                code='invalid_container',
+                message=f'{".".join(current_path) or "根节点"} 不是对象，已回退默认值。',
+                recoverable=(source == '用户配置'),
+            )
+            return
+
+        for key, raw_value in raw_node.items():
+            if key not in schema_node:
+                self._record_unknown_path(source, current_path + (key,))
+                continue
+
+            schema_child = schema_node[key]
+            if isinstance(schema_child, SettingFieldSpec):
+                try:
+                    normalized_value = self._normalize_field_value(
+                        schema_child,
+                        raw_value,
+                        source=source,
+                    )
+                except ValueError:
+                    continue
+                effective_node[key] = normalized_value
+                continue
+
+            if not isinstance(raw_value, dict):
+                self._record_config_issue(
+                    source=source,
+                    code='invalid_container',
+                    message=f'{".".join(current_path + (key,))} 应为对象，已回退默认值。',
+                    recoverable=(source == '用户配置'),
+                )
+                continue
+
+            self._merge_schema_node(
+                schema_node=schema_child,
+                raw_node=raw_value,
+                effective_node=effective_node[key],
+                current_path=current_path + (key,),
+                source=source,
+            )
+
+    def _normalize_field_value(
+        self,
+        spec: SettingFieldSpec,
+        raw_value,
+        *,
+        source: str,
+        record_issue: bool = True,
+        record_warning: bool = True,
+    ):
+        recoverable = source == '用户配置'
+        path_text = '.'.join(spec.path)
+
+        try:
+            if spec.field_id == 'task_order':
+                return self._normalize_task_order_value(raw_value, source=source, record_issue=record_issue, record_warning=record_warning)
+            if spec.coerce is not None:
+                value = spec.coerce(raw_value)
+            elif spec.value_type is bool:
+                value = self._coerce_bool(raw_value)
+            elif spec.value_type is int:
+                value = self._coerce_int(raw_value)
+            elif spec.value_type is float:
+                value = self._coerce_float(raw_value)
+            elif spec.value_type is str:
+                value = self._coerce_str(raw_value)
+            elif spec.value_type is list:
+                if not isinstance(raw_value, list):
+                    raise ValueError('value must be a list')
+                value = deepcopy(raw_value)
+            else:
+                if not isinstance(raw_value, spec.value_type):
+                    raise ValueError(f'value must be {spec.value_type}')
+                value = deepcopy(raw_value)
+        except ValueError as exc:
+            if record_issue:
+                self._record_config_issue(
+                    source=source,
+                    code='invalid_value',
+                    message=f'{path_text} 值非法({exc})，已回退默认值。',
+                    recoverable=recoverable,
+                )
+            raise
+
+        if spec.options is not None and value not in spec.options:
+            if record_issue:
+                self._record_config_issue(
+                    source=source,
+                    code='invalid_option',
+                    message=f'{path_text} 不在允许选项中，已回退默认值。',
+                    recoverable=recoverable,
+                )
+            raise ValueError('value is not in allowed options')
+
+        return value
+
+    def _normalize_task_order_value(self, raw_value, *, source: str, record_issue: bool, record_warning: bool):
+        recoverable = source == '用户配置'
+        default_task_order = [spec.key for spec in get_task_specs()]
+        available_task_keys = set(default_task_order)
+
+        if not isinstance(raw_value, list):
+            if record_warning:
+                self._record_startup_warning("Task_Center.task_order 配置非法，已回退到默认顺序。")
+            if record_issue:
+                self._record_config_issue(
+                    source=source,
+                    code='invalid_task_order',
+                    message='Task_Center.task_order 不是列表，已回退默认顺序。',
+                    recoverable=recoverable,
+                )
+            return list(default_task_order)
+
+        source_order = []
+        seen = set()
+        has_non_string = False
+        has_unknown = False
+        has_duplicate = False
+
+        for item in raw_value:
+            if not isinstance(item, str):
+                has_non_string = True
+                continue
+            if item in seen:
+                has_duplicate = True
+                continue
+            seen.add(item)
+            if item not in available_task_keys:
+                has_unknown = True
+                continue
+            source_order.append(item)
+
+        if has_non_string or has_unknown or has_duplicate:
+            problems = []
+            if has_non_string:
+                problems.append("非字符串项")
+            if has_unknown:
+                problems.append("未知任务 key")
+            if has_duplicate:
+                problems.append("重复 key")
+            if record_warning:
+                self._record_startup_warning(
+                    f"Task_Center.task_order 配置包含{' / '.join(problems)}，已过滤非法项并补齐缺失任务。"
+                )
+            if record_issue:
+                self._record_config_issue(
+                    source=source,
+                    code='invalid_task_order_items',
+                    message=f"Task_Center.task_order 包含{' / '.join(problems)}，已过滤并补齐默认顺序。",
+                    recoverable=recoverable,
+                )
+
+        ordered_keys = []
+        seen = set()
+        for key in source_order:
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered_keys.append(key)
+        for key in default_task_order:
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered_keys.append(key)
+        return ordered_keys
+
+    def _record_unknown_path(self, source: str, path: tuple[str, ...]):
+        recoverable = source == '用户配置'
+        path_text = '.'.join(path)
+        if len(path) >= 2 and path[0] == 'Batch_Files' and path[1] not in {spec.key for spec in get_task_specs()}:
+            message = f'{path_text} 不是已注册任务的设置分组，已忽略。'
+        else:
+            message = f'{path_text} 未在 schema 中定义，已忽略。'
+        self._record_config_issue(
+            source=source,
+            code='unknown_path',
+            message=message,
+            recoverable=recoverable,
+        )
+
+    def _record_startup_warning(self, message: str):
+        if message in self._startup_warnings:
+            return
+        print(f"From AppSettings:\n\tWarning: {message}\n")
+        self._startup_warnings.append(message)
+
+    def _record_config_issue(self, source: str, code: str, message: str, recoverable: bool):
+        issue = ConfigHealthIssue(source=source, code=code, message=message, recoverable=recoverable)
+        if issue in self._config_issues:
+            return
+        self._config_issues.append(issue)
+
+    def _read_json_file(self, path: str, *, source: str, recoverable: bool):
+        if not os.path.exists(path):
+            self._record_config_issue(
+                source=source,
+                code='missing_file',
+                message=f'{path} 不存在，已回退到 schema 默认值。',
+                recoverable=recoverable,
+            )
+            return None
+
+        try:
+            with open(path, 'r', encoding='utf-8') as file:
+                return json.load(file)
+        except Exception as exc:
+            self._record_config_issue(
+                source=source,
+                code='parse_error',
+                message=f'{path} 解析失败({exc})，已回退到 schema 默认值。',
+                recoverable=recoverable,
+            )
+            return None
+
+    def _resolve_default_settings_file(self) -> str:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_dir, 'configs', 'settings.json')
+
+    def _resolve_user_settings_file(self) -> str:
+        user_home = os.environ.get("HOME", "")
+        if not user_home and os.name == 'nt':
+            user_home = os.environ.get("USERPROFILE", "")
+        user_config_dir = os.path.join(user_home, "Develop", "RD-tools-configs")
+        return os.path.join(user_config_dir, "settings.json")
+
+    def _ensure_user_config_parent(self):
+        user_config_dir = os.path.dirname(self.settings_file)
+        try:
+            os.makedirs(user_config_dir, exist_ok=True)
+        except Exception as exc:
+            self._record_config_issue(
+                source='用户配置',
+                code='mkdir_failed',
+                message=f'无法创建用户配置目录({exc})，将以内存默认值继续运行。',
+                recoverable=True,
+            )
+
+    def _write_settings_file(self, settings_json: dict | None = None, *, target_path: str | None = None):
+        payload = self.__settings_json if settings_json is None else settings_json
+        path = target_path or self.settings_file
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as file:
+                json.dump(payload, file, indent=4, ensure_ascii=False)
+            return True
+        except Exception as exc:
+            print(f"From AppSettings:\n\t写入配置文件失败: {exc}\n")
+            return False
+
+    def _build_schema_tree(self):
+        tree: dict[str, object] = {}
+        for spec in self._field_specs:
+            cursor = tree
+            for key in spec.path[:-1]:
+                cursor = cursor.setdefault(key, {})
+            cursor[spec.path[-1]] = spec
+        return tree
+
+    @staticmethod
+    def _lookup_path(source: dict | None, path):
+        cursor = source
+        for key in path:
+            if not isinstance(cursor, dict) or key not in cursor:
+                return None
+            cursor = cursor[key]
+        return cursor
+
+    @staticmethod
+    def _set_value_at_path(payload: dict, path: tuple[str, ...], value):
+        cursor = payload
+        for key in path[:-1]:
+            if key not in cursor or not isinstance(cursor[key], dict):
+                cursor[key] = {}
+            cursor = cursor[key]
+        cursor[path[-1]] = deepcopy(value)
+
+    @staticmethod
+    def _coerce_bool(value) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in ('true', 'false'):
+                return normalized == 'true'
+        raise ValueError('value must be a boolean')
+
+    @staticmethod
+    def _coerce_int(value) -> int:
+        if isinstance(value, bool):
+            raise ValueError('bool is not allowed as int')
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith(('+', '-')):
+                sign = stripped[0]
+                digits = stripped[1:]
+                if digits.isdigit():
+                    return int(sign + digits)
+            elif stripped.isdigit():
+                return int(stripped)
+        raise ValueError('value must be an integer')
+
+    @staticmethod
+    def _coerce_float(value) -> float:
+        if isinstance(value, bool):
+            raise ValueError('bool is not allowed as float')
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            try:
+                return float(stripped)
+            except ValueError as exc:
+                raise ValueError('value must be a float') from exc
+        raise ValueError('value must be a float')
+
+    @staticmethod
+    def _coerce_str(value) -> str:
+        if value is None:
+            raise ValueError('value must not be null')
+        return str(value)

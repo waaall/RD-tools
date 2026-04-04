@@ -496,3 +496,9 @@ class FilesRenamer(FilesBasic):
             f"名称未变化 {stats[RenameStatus.SKIPPED_NO_CHANGE]} | "
             f"失败 {stats[RenameStatus.ERROR]}"
         )
+
+
+if __name__ == '__main__':
+    from core.task_cli import run_task_cli
+
+    raise SystemExit(run_task_cli('files-renamer', operation_cls=FilesRenamer))

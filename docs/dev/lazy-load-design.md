@@ -64,15 +64,16 @@
 
 ```mermaid
 flowchart LR
-    A["应用启动"] --> B["build_task_descriptors() 只构建元数据"]
+    A["应用启动"] --> B["core.task_registry + ui.task_ui_registry 只构建轻量元数据"]
     B --> C["FileWindow 注册任务入口"]
     C --> D["用户点击执行任务"]
     D --> E["确认弹窗 + 参数展示"]
     E --> F["创建 one-shot BatchFilesBinding"]
     F --> G["TaskLoader.load_class(module_path, class_name)"]
     G --> H["动态导入对应任务模块"]
-    H --> I["实例化 handler"]
-    I --> J["设置工作目录并执行任务"]
+    H --> I["build_task_params() 组装最终参数"]
+    I --> J["实例化 handler"]
+    J --> K["设置工作目录并执行任务"]
 ```
 
 当前这条链上，真正加载任务模块的入口是：
@@ -82,6 +83,8 @@ flowchart LR
   - `BatchFilesBinding.run()`
 - `core/task_loader.py`
   - `TaskLoader.load_class()`
+- `core/task_params.py`
+  - `build_task_params()`
 
 ## 4. 第一层设计：模块级懒加载
 
@@ -92,15 +95,22 @@ flowchart LR
 - 启动时只认识“任务是谁”
 - 执行时才认识“任务类是什么”
 
-因此 `TaskDescriptor` 不再持有类对象，而只保存元数据：
+因此当前把任务注册拆成两层：
+
+- `core.task_registry.TaskSpec`
+  - 保存 `key`、`title`、`description`、`module_path`、`class_name`、`default_params`
+- `ui.task_ui_registry.TaskUiMeta`
+  - 只保存 GUI 相关的 `icon`
+
+GUI 侧的 `TaskDescriptor` 只负责把这两层拼起来，而不再承载任务类对象。
+
+核心元数据包括：
 
 - `key`
 - `title`
 - `description`
-- `icon`
 - `module_path`
 - `class_name`
-- `settings_group`
 - `default_params`
 
 这样带来的效果是：
@@ -108,6 +118,7 @@ flowchart LR
 - 任务页可以正常展示任务列表
 - 设置页可以正常展示任务设置入口
 - 任务确认弹窗可以展示当前设置
+- CLI 可以复用同一份核心任务注册，但不会额外导入 `qfluentwidgets`
 - 但任务实现模块在这一阶段仍未导入
 
 ### 4.2 统一加载器
@@ -231,7 +242,15 @@ flowchart LR
 - `modules.app_settings`
 - `modules.files_basic`
 - `core.task_loader`
+- `core.task_registry`
+- `core.task_params`
 - `ui.task_descriptor`
+- `ui.task_ui_registry`
+
+补充说明：
+
+- `core.task_cli` 也是轻量基础设施，但它属于 CLI 入口层，不在 GUI 启动链上
+- GUI 启动阶段必须可用的是 registry、参数构建、设置系统和展示元数据这些模块
 
 ## 7. 设置与懒加载的关系
 
@@ -239,14 +258,16 @@ flowchart LR
 
 当前做法是：
 
-- 设置页不再依赖 `operation_cls.__name__`
-- 统一使用 descriptor 中的 `settings_group`
+- 设置页和确认弹窗都按稳定 `task_key` 读取 `Batch_Files.<task_key>`
+- GUI 和 CLI 都通过共享的 `build_task_params()` 构建最终参数
+- 任务实现类只接收显式参数，不再自己回读应用层配置文件
 
 这样带来的好处是：
 
 - 设置页可以在任务模块未导入时正常工作
-- 配置结构继续沿用旧类名分组
+- 配置结构不再依赖类名
 - 不需要为了读设置而提前导入任务类
+- GUI 和 CLI 的参数拼装逻辑保持一致
 
 当前正式语义是：
 

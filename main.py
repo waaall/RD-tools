@@ -4,13 +4,14 @@ import sys
 
 from PySide6.QtCore import QThread, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
-from qfluentwidgets import FluentIcon as FIF
 
 from core import MessageLevel, TaskLoader, TaskMessage
+from core.task_params import build_task_params
 from main_window import MainWindow
 from modules.app_settings import AppSettings
 from modules.files_basic import FilesBasic
 from ui import TaskDescriptor, apply_app_theme
+from ui.task_ui_registry import build_task_descriptors
 from widgets.confirm_dialog import TaskExecutionConfirmDialog
 from widgets.setting_page import humanize_setting_label
 
@@ -35,12 +36,8 @@ class BatchFilesBinding(QThread):
     def _forward_result(self, message):
         self.result_signal.emit(self.task_key, message)
 
-    def _build_handler_params(self) -> dict[str, object]:
-        params = self.settings.get_class_params(self.descriptor.settings_group)
-        for key, value in self.descriptor.default_params.items():
-            if params.get(key) in (None, {}):
-                params[key] = value
-        return params
+    def _build_handler_params(self, operation_cls: type) -> dict[str, object]:
+        return build_task_params(self.descriptor.task_spec, self.settings, operation_cls)
 
     def _handle_finished(self):
         success = self._run_error is None
@@ -56,7 +53,7 @@ class BatchFilesBinding(QThread):
         handler_object = None
         try:
             operation_cls = TaskLoader.load_class(self.descriptor.module_path, self.descriptor.class_name)
-            params = self._build_handler_params()
+            params = self._build_handler_params(operation_cls)
 
             FilesBasic.set_bootstrap_reporter(self._forward_result)
             try:
@@ -79,7 +76,7 @@ class BatchFilesBinding(QThread):
 
 
 def build_task_setting_lines(settings: AppSettings, descriptor: TaskDescriptor) -> list[str]:
-    entries = settings.get_setting_entries('Batch_Files', group_name=descriptor.settings_group)
+    entries = settings.get_setting_entries('Batch_Files', group_name=descriptor.key)
     return [
         f"{humanize_setting_label(entry['path'][-1])}: {format_setting_value(entry['value'])}"
         for entry in entries
@@ -181,96 +178,6 @@ def order_task_descriptors(settings: AppSettings, descriptors: list[TaskDescript
         for key in ordered_keys
         if key in descriptor_map
     ]
-
-
-def build_task_descriptors() -> list[TaskDescriptor]:
-    return [
-        TaskDescriptor(
-            key='merge-colors',
-            title='颜色通道合成',
-            description='按文件名前缀配对 R/G/B 图像，并合成新的彩色结果图。',
-            icon=FIF.APPLICATION,
-            module_path='modules.merge_colors',
-            class_name='MergeColors',
-            settings_group='MergeColors',
-            default_params={'colors': ['R', 'G']},
-        ),
-        TaskDescriptor(
-            key='dicom-processing',
-            title='DICOM处理',
-            description='批量读取 DICOM 序列，导出图片并在需要时生成视频。',
-            icon=FIF.FOLDER_ADD,
-            module_path='modules.dicom_to_imgs',
-            class_name='DicomToImage',
-            settings_group='DicomToImage',
-        ),
-        TaskDescriptor(
-            key='split-colors',
-            title='分离颜色通道',
-            description='把输入图片拆分为独立的 R/G/B 通道输出。',
-            icon=FIF.SYNC,
-            module_path='modules.split_colors',
-            class_name='SplitColors',
-            settings_group='SplitColors',
-            default_params={'colors': ['R', 'G']},
-        ),
-        TaskDescriptor(
-            key='twist-images',
-            title='图片视角变换',
-            description='按预设四边形参数对图片做透视变换。',
-            icon=FIF.EDIT,
-            module_path='modules.twist_shape',
-            class_name='TwistImgs',
-            settings_group='TwistImgs',
-            default_params={'twisted_corner': [[0, 0], [430, 82], [432, 268], [0, 276]]},
-        ),
-        TaskDescriptor(
-            key='bilibili-export',
-            title='B站视频导出',
-            description='批量修复并合并 Bilibili 缓存视频为可播放 MP4。',
-            icon=FIF.PLAY,
-            module_path='modules.bili_videos',
-            class_name='BiliVideos',
-            settings_group='BiliVideos',
-        ),
-        TaskDescriptor(
-            key='ecg-handler',
-            title='ECG信号处理',
-            description='分析 ECG CSV 数据，生成原始、滤波和高级分析图表。',
-            icon=FIF.IOT,
-            module_path='modules.ECG_handler',
-            class_name='ECGHandler',
-            settings_group='ECGHandler',
-        ),
-        TaskDescriptor(
-            key='subtitle-generation',
-            title='字幕生成',
-            description='对音视频文件批量抽取音频并生成 SRT 字幕。',
-            icon=FIF.DOCUMENT,
-            module_path='modules.gen_subtitles',
-            class_name='GenSubtitles',
-            settings_group='GenSubtitles',
-        ),
-        TaskDescriptor(
-            key='files-renamer',
-            title='批量重命名',
-            description='按 prefix / all / body / between 规则批量重命名文件。',
-            icon=FIF.EDIT,
-            module_path='modules.files_renamer',
-            class_name='FilesRenamer',
-            settings_group='FilesRenamer',
-        ),
-        TaskDescriptor(
-            key='mac-cleaner',
-            title='Mac铲屎官',
-            description='批量清理指定目录下的系统垃圾文件。',
-            icon=FIF.FOLDER,
-            module_path='modules.mac_poop_scooper',
-            class_name='MacPoopScooper',
-            settings_group='MacPoopScooper',
-        ),
-    ]
-
 
 def main():
     app = QApplication(sys.argv)

@@ -18,7 +18,6 @@
 """
 # =========================用到的库==========================
 import os
-import sys
 
 import numpy as np
 
@@ -42,8 +41,6 @@ def _get_cv2_module():
     _CV2 = cv2
     return _CV2
 
-# 获取当前脚本所在目录的父目录
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules.files_basic import FilesBasic
 
 
@@ -383,49 +380,7 @@ class TwistImgs(FilesBasic):
         return np.float32(projected)
 
 
-# =====================main(单独执行时使用)=====================
-def main():
-    # 获取用户输入的路径
-    input_path = input("请复制实验文件夹所在目录的绝对路径(若Python代码在同一目录, 请直接按Enter): \n")
-
-    # 判断用户是否直接按Enter, 设置为当前工作目录
-    if not input_path:
-        work_folder = os.getcwd()
-    elif os.path.isdir(input_path):
-        work_folder = input_path
-
-    """
-        example_twisted_corner =  [
-                        [0, 0],     # 原图的左上
-                        [w, 0],     # 原图的右上
-                        [w, h],     # 原图的右下
-                        [0, h]],    # 原图的左下
-    """
-    twisted_corner = [[0, 0], [430, 82], [432, 268], [0, 276]]
-    img_handler = TwistImgs(twisted_corner=twisted_corner)
-
-    img_handler.set_work_folder(work_folder)
-    possble_dirs = img_handler.possble_dirs
-
-    # 给用户显示, 请用户输入index
-    number = len(possble_dirs)
-    img_handler.send_message('\n')
-    for i in range(number):
-        print(f"{i}: {possble_dirs[i]}")
-    user_input = input("\n请选择要处理的序号(用空格分隔多个序号): \n")
-
-    # 解析用户输入
-    try:
-        indices = user_input.split()
-        index_list = [int(index) for index in indices]
-    except ValueError:
-        img_handler.send_message("输入错误, 必须输入数字")
-
-    RESULT = img_handler.selected_dirs_handler(index_list)
-    if not RESULT:
-        img_handler.send_message("输入数字不在提供范围, 请重新运行")
-
-
-# =========================调试用============================
 if __name__ == '__main__':
-    main()
+    from core.task_cli import run_task_cli
+
+    raise SystemExit(run_task_cli('twist-images', operation_cls=TwistImgs))

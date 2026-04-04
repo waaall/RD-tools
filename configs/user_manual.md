@@ -11,7 +11,7 @@
 
 ## 2.0 设置
 设置文件保存到：用户文件夹/Develop/RD-tools-configs/settings.json
-也可以在UI界面修改，注意有的参数可能会重启软件才会生效，多数参数可以即时生效。
+也可以在 UI 界面修改。GUI 和 CLI 共用这同一份用户配置文件；多数任务参数在下一次执行时生效。
 
 ## 2.1 dicom处理
 此模块功能：医学影像的dicom文件转换为图片或者视频，保存在与原dicomdir层级的文件夹中。
@@ -23,10 +23,16 @@
 4. 点击卡片中的《执行任务》按钮。
 5. 观察该任务卡片自己的日志显示；如果出现“SUCCESS! log file saved."，表示完成。
 
-### 2.1.2 CTL处理
-在terminal中直接运行modules文件夹中的dicom_to_imgs.py文件，其与UI是相同的处理逻辑。
+### 2.1.2 CLI处理
+在 terminal 中运行：
 
-进一步来讲，如果想定制操作逻辑，比如你的DICOM文件结构和我假设的不同，可以重写dicom_to_imgs.py中最后的main函数，调用DicomToImage类、file_basic.py中基类的函数，实现针对你特殊文件结构中dicom文件的批量处理。
+```bash
+python -m modules.dicom_to_imgs
+```
+
+它与 UI 共用同一份设置文件，处理逻辑保持一致。
+
+如果你的 DICOM 文件结构和当前假设不同，可以基于 `DicomToImage` 类和 `modules/files_basic.py` 中的基础能力改写处理逻辑；CLI 入口本身已经统一收敛，不需要再维护一份单独的交互式 `main()`。
 
 
 ## 2.2 ECG信号处理

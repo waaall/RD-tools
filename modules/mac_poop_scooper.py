@@ -10,12 +10,9 @@
 """
 # =========================用到的库==========================
 import os
-import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-# 获取当前脚本所在目录的父目录
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules.files_basic import FilesBasic
 
 
@@ -93,44 +90,7 @@ class MacPoopScooper(FilesBasic):
         self.send_message(f"累积找到了{self.files_found}个poop文件, 删除了{self.files_deleted}个")
 
 
-# =====================main(单独执行时使用)=====================
-def main():
-    # 获取用户输入的路径
-    input_path = input("请复制要清理的文件夹绝对路径(若脚本在同一目录, 请直接按Enter):\n")
-
-    # 判断用户是否直接按Enter, 设置为当前工作目录
-    if not input_path:
-        work_folder = os.getcwd()
-    elif os.path.isdir(input_path):
-        work_folder = input_path
-    else:
-        print(f"错误:路径 {input_path} 不存在或不是文件夹")
-        return
-
-    cleaner = MacPoopScooper()
-    cleaner.set_work_folder(work_folder)
-    possble_dirs = cleaner.possble_dirs
-
-    # 给用户显示, 请用户输入index
-    number = len(possble_dirs)
-    cleaner.send_message('\n')
-    for i in range(number):
-        print(f"{i}: {possble_dirs[i]}")
-    user_input = input("\n请选择要处理的序号(用空格分隔多个序号):\n")
-
-    # 解析用户输入
-    try:
-        indices = user_input.split()
-        index_list = [int(index) for index in indices]
-    except ValueError:
-        cleaner.send_message("输入错误, 必须输入数字")
-        return
-
-    RESULT = cleaner.selected_dirs_handler(index_list)
-    if not RESULT:
-        cleaner.send_message("输入数字不在提供范围, 请重新运行")
-
-
-# =========================调试用============================
 if __name__ == '__main__':
-    main()
+    from core.task_cli import run_task_cli
+
+    raise SystemExit(run_task_cli('mac-cleaner', operation_cls=MacPoopScooper))

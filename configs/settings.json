@@ -33,43 +33,7 @@
         ]
     },
     "Batch_Files": {
-        "DicomToImage": {
-            "log_folder_name": "dicom_handle_log",
-            "fps": 10,
-            "frame_dpi": 200,
-            "out_dir_prefix": "Img-"
-        },
-        "BiliVideos": {
-            "log_folder_name": "bili_video_handle_log",
-            "out_dir_prefix": "fixed-",
-            "AddGroupTitle": true,
-            "GroupTitleMaxLength": 10
-        },
-        "MergeColors": {
-            "log_folder_name": "merge_color_log",
-            "out_dir_prefix": "merge-"
-        },
-        "GenSubtitles": {
-            "log_folder_name": "gen_subtitles_log",
-            "model_path": "/home/active-team/Develop/whisper_models/ggml-large-v3-turbo-q5_0.bin",
-            "parallel": false
-        },
-        "ECGHandler": {
-            "log_folder_name": "ecg_handler_log",
-            "sampling_rate": 1000,
-            "parallel": false,
-            "out_dir_prefix": "ecg-",
-            "filter_low_cut": 0.5,
-            "filter_high_cut": 30.0,
-            "filter_order":2,
-            "drop_raw_zero": false,
-            "trim_raw_data": false,
-            "trim_filtered_data": true,
-            "trim_percentage": 6.0,
-            "time_range_short": 3.0,
-            "time_range_medium": 10.0
-        },
-        "FilesRenamer": {
+        "files-renamer": {
             "log_folder_name": "files_renamer_log",
             "mode": "prefix",
             "pattern": "-",
@@ -80,6 +44,42 @@
             "case_sensitive": false,
             "recursive": false,
             "max_threads": 4
+        },
+        "bilibili-export": {
+            "log_folder_name": "bili_video_handle_log",
+            "out_dir_prefix": "fixed-",
+            "AddGroupTitle": true,
+            "GroupTitleMaxLength": 10
+        },
+        "subtitle-generation": {
+            "log_folder_name": "gen_subtitles_log",
+            "model_path": "",
+            "parallel": false
+        },
+        "merge-colors": {
+            "log_folder_name": "merge_color_log",
+            "out_dir_prefix": "merge-"
+        },
+        "ecg-handler": {
+            "log_folder_name": "ecg_handler_log",
+            "sampling_rate": 1000,
+            "parallel": false,
+            "out_dir_prefix": "ecg-",
+            "filter_low_cut": 0.5,
+            "filter_high_cut": 30.0,
+            "filter_order": 2,
+            "drop_raw_zero": false,
+            "trim_raw_data": false,
+            "trim_filtered_data": true,
+            "trim_percentage": 6.0,
+            "time_range_short": 3.0,
+            "time_range_medium": 10.0
+        },
+        "dicom-processing": {
+            "log_folder_name": "dicom_handle_log",
+            "fps": 10,
+            "frame_dpi": 200,
+            "out_dir_prefix": "Img-"
         }
     }
 }

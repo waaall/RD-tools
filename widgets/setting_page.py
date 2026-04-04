@@ -23,6 +23,8 @@ from qfluentwidgets import (
     FluentIcon as FIF,
     LineEdit,
     ListWidget,
+    MessageBox,
+    PrimaryPushButton,
     ScrollArea,
     SegmentedWidget,
     SettingCard,
@@ -195,6 +197,7 @@ class SettingsSplitView(QWidget):
 class SettingWindow(QWidget):
     notification_requested = Signal(str, str, str)
     theme_changed = Signal(str)
+    settings_reloaded = Signal()
 
     CATEGORY_ICONS = {
         'General': FIF.SETTING,
@@ -208,13 +211,14 @@ class SettingWindow(QWidget):
         super().__init__()
         self.settings = settings
         self.task_descriptors = task_descriptors or []
-        self.main_categories = self.settings.get_main_categories() or []
-        self.general_categories = [name for name in self.main_categories if name in self.GENERAL_CATEGORIES]
         self._task_descriptor_map = {descriptor.key: descriptor for descriptor in self.task_descriptors}
-        self._configured_task_groups = set(self.settings.get_setting_groups('Batch_Files'))
+        self.main_categories = []
+        self.general_categories = []
+        self._configured_task_keys: set[str] = set()
 
         self.setObjectName('AppPage')
         self._build_ui()
+        self._refresh_from_settings()
         self._populate_navigation()
         self._switch_panel(self.general_view, 'general')
 
@@ -231,10 +235,32 @@ class SettingWindow(QWidget):
         title.setObjectName('PageTitle')
         main_layout.addWidget(title)
 
-        description = BodyLabel('设置项变更即时写回配置文件。通用设置与任务设置共享同一套侧栏 + 详情布局，不改变现有配置结构与任务分组命名。', self)
+        description = BodyLabel('设置项变更即时写回配置文件。通用设置与任务设置共享同一套侧栏 + 详情布局，任务配置按稳定 task key 绑定。', self)
         description.setObjectName('PageDescription')
         description.setWordWrap(True)
         main_layout.addWidget(description)
+
+        self.config_health_card = CardWidget(self)
+        self.config_health_card.setObjectName('ConfigHealthCard')
+        health_layout = QVBoxLayout(self.config_health_card)
+        health_layout.setContentsMargins(16, 16, 16, 16)
+        health_layout.setSpacing(10)
+
+        self.config_health_title = SubtitleLabel('配置告警', self.config_health_card)
+        health_layout.addWidget(self.config_health_title)
+
+        self.config_health_body = BodyLabel('', self.config_health_card)
+        self.config_health_body.setWordWrap(True)
+        health_layout.addWidget(self.config_health_body)
+
+        button_row = QHBoxLayout()
+        button_row.addStretch(1)
+        self.reset_defaults_button = PrimaryPushButton('恢复默认配置', self.config_health_card)
+        self.reset_defaults_button.clicked.connect(self._reset_user_settings_to_defaults)
+        button_row.addWidget(self.reset_defaults_button)
+        health_layout.addLayout(button_row)
+        self.config_health_card.hide()
+        main_layout.addWidget(self.config_health_card)
 
         self.segmented_widget = SegmentedWidget(self)
         self.segmented_widget.setObjectName('SegmentHost')
@@ -252,6 +278,12 @@ class SettingWindow(QWidget):
         self.general_view.selection_changed.connect(self._render_general_category)
         self.task_view.selection_changed.connect(self._render_task_settings)
 
+    def _refresh_from_settings(self):
+        self.main_categories = self.settings.get_main_categories() or []
+        self.general_categories = [name for name in self.main_categories if name in self.GENERAL_CATEGORIES]
+        self._configured_task_keys = set(self.settings.get_setting_groups('Batch_Files'))
+        self._refresh_health_banner()
+
     def _populate_navigation(self):
         general_items = [
             SettingsNavItem(key=category_name, title=category_name, icon=self.CATEGORY_ICONS.get(category_name, FIF.SETTING))
@@ -261,7 +293,7 @@ class SettingWindow(QWidget):
 
         task_items = []
         for descriptor in self.task_descriptors:
-            if descriptor.settings_group not in self._configured_task_groups:
+            if descriptor.key not in self._configured_task_keys:
                 continue
             task_items.append(SettingsNavItem(key=descriptor.key, title=descriptor.title, icon=descriptor.icon))
         self.task_view.set_nav_items(task_items)
@@ -274,6 +306,7 @@ class SettingWindow(QWidget):
 
         self.task_descriptors = task_descriptors or []
         self._task_descriptor_map = {descriptor.key: descriptor for descriptor in self.task_descriptors}
+        self._refresh_from_settings()
         self._populate_navigation()
 
         if self.panel_stack.currentWidget() is self.task_view:
@@ -309,9 +342,22 @@ class SettingWindow(QWidget):
             self.task_view.show_empty_state('任务不存在', '未找到当前任务的元数据。')
             return
 
-        entries = self.settings.get_setting_entries('Batch_Files', group_name=descriptor.settings_group)
+        entries = self.settings.get_setting_entries('Batch_Files', group_name=descriptor.key)
         grouped_entries = self._group_entries(entries, start_index=2, default_group_title=descriptor.title)
         self._render_grouped_entries(self.task_view, grouped_entries, descriptor.icon)
+
+    def _refresh_health_banner(self):
+        config_health = self.settings.get_config_health()
+        if not config_health.has_issues:
+            self.config_health_card.hide()
+            return
+
+        lines = config_health.format_lines()
+        self.config_health_body.setText(
+            "检测到配置文件解析或校验问题，当前已回退到 schema 默认值继续运行。\n\n"
+            + "\n".join(f"• {line}" for line in lines)
+        )
+        self.config_health_card.show()
 
     def _render_grouped_entries(self, view: SettingsSplitView, grouped_entries: list[tuple[str, list[dict[str, Any]]]], icon):
         view.clear_detail()
@@ -327,8 +373,8 @@ class SettingWindow(QWidget):
                     name=entry['name'],
                     value=entry['value'],
                     options=entry['options'],
-                    title=title,
-                    content=None,
+                    title=entry.get('label') or title,
+                    content=entry.get('description'),
                     icon=icon,
                     parent=view.detail_container,
                 )
@@ -350,7 +396,7 @@ class SettingWindow(QWidget):
         descriptor = self._task_descriptor_map.get(task_key)
         if descriptor is None:
             return False
-        return descriptor.settings_group in self._configured_task_groups
+        return descriptor.key in self._configured_task_keys
 
     def open_task_settings(self, task_key: str) -> bool:
         if not self.has_task_settings(task_key):
@@ -389,6 +435,47 @@ class SettingWindow(QWidget):
 
         if name == 'theme':
             self.theme_changed.emit(str(value))
+
+    def _reset_user_settings_to_defaults(self):
+        dialog = MessageBox(
+            '恢复默认配置',
+            '这会覆盖用户目录下的 settings.json，并丢弃当前自定义设置。是否继续？',
+            self,
+        )
+        dialog.yesButton.setText('确认覆盖')
+        dialog.cancelButton.setText('取消')
+        if not dialog.exec():
+            return
+
+        current_panel = self.panel_stack.currentWidget()
+        current_general_key = None
+        current_task_key = None
+        current_general_item = self.general_view.nav_list.currentItem()
+        current_task_item = self.task_view.nav_list.currentItem()
+        if current_general_item is not None:
+            current_general_key = current_general_item.data(Qt.UserRole)
+        if current_task_item is not None:
+            current_task_key = current_task_item.data(Qt.UserRole)
+
+        if not self.settings.reset_user_settings_to_defaults():
+            self.notification_requested.emit('error', '恢复默认配置失败', '用户配置文件无法写回默认值。')
+            return
+
+        self._refresh_from_settings()
+        self._populate_navigation()
+
+        if current_panel is self.task_view:
+            self._switch_panel(self.task_view, 'tasks')
+            if current_task_key is not None and self._select_nav_item(self.task_view, current_task_key):
+                pass
+        else:
+            self._switch_panel(self.general_view, 'general')
+            if current_general_key is not None and self._select_nav_item(self.general_view, current_general_key):
+                pass
+
+        self.settings_reloaded.emit()
+        self.theme_changed.emit(str(self.settings.theme))
+        self.notification_requested.emit('success', '恢复默认配置成功', '用户配置文件已重建为 schema 默认值。')
 
     @staticmethod
     def _humanize(value: str) -> str:

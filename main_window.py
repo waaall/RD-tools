@@ -67,6 +67,7 @@ class MainWindow(FluentWindow):
         self.FileWindow.task_order_changed.connect(self._handle_task_order_change)
         self.SettingWindow.notification_requested.connect(self.show_notification)
         self.SettingWindow.theme_changed.connect(self.apply_theme)
+        self.SettingWindow.settings_reloaded.connect(self._handle_settings_reloaded)
 
     def show_notification(self, level: str, title: str, content: str, duration: int = 3000):
         notifier = getattr(InfoBar, level, InfoBar.info)
@@ -131,6 +132,17 @@ class MainWindow(FluentWindow):
         # 设置页不提供拖拽，但要跟随同一份有序 descriptor 立即刷新导航顺序。
         self.SettingWindow.set_task_descriptors(self.task_descriptors)
 
+    def _handle_settings_reloaded(self):
+        ordered_keys = self.settings.get_task_order([descriptor.key for descriptor in self.task_descriptors])
+        descriptor_map = {descriptor.key: descriptor for descriptor in self.task_descriptors}
+        self.task_descriptors = [
+            descriptor_map[key]
+            for key in ordered_keys
+            if key in descriptor_map
+        ]
+        self.FileWindow.apply_task_order(ordered_keys)
+        self.SettingWindow.set_task_descriptors(self.task_descriptors)
+
     def show_for_launch(self):
         self._apply_launch_geometry()
         if bool(self.settings.launch_maximized):
@@ -175,9 +187,11 @@ if __name__ == '__main__':
     from PySide6.QtWidgets import QApplication
     import sys
 
+    from ui.task_ui_registry import build_task_descriptors
+
     app = QApplication(sys.argv)
     settings = AppSettings()
     apply_app_theme(settings.theme, app)
-    trial = MainWindow(settings)
+    trial = MainWindow(settings, build_task_descriptors())
     trial.show_for_launch()
     sys.exit(app.exec())

@@ -17,8 +17,9 @@
 我为此软件的模块化做了一些力所能及的努力，希望能帮助他在开源社区成长。包括但不限于：
 
 - 每个功能的逻辑代码可以完全独立于UI代码作为脚本使用。
+- 每个任务模块都可以通过 `python -m modules.xxx` 作为统一 CLI 入口运行。
 - 每个页面都可以单独运行显示，用于界面的微调。
-- 尽可能简化功能界面和逻辑界面的绑定，且集成在main.py
+- 尽可能简化功能界面和逻辑界面的绑定，核心注册与参数构建下沉到基础设施层。
 - 实现了添加页面的“原子操作”。
 - 实现了添加常用逻辑代码绑定的“原子操作”。
 
@@ -29,6 +30,12 @@
 ```python
 
 this-project/
+│
+├── core/
+│   ├── task_loader.py
+│   ├── task_registry.py
+│   ├── task_params.py
+│   └── task_cli.py
 │
 ├── libs/
 │
@@ -41,13 +48,20 @@ this-project/
 │   ├── __init__.py
 │   ├── app_settings.py
 │   ├── files_basic.py
+│   ├── files_renamer.py
+│   ├── mac_poop_scooper.py
 │   ├── merge_colors.py
 │   ├── split_colors.py
-│   └── twist_shape.py
+│   ├── twist_shape.py
 │   ├── dicom_to_imgs.py
-│   └── bili_videos.py
-│   └── ECG_handler.py
+│   ├── bili_videos.py
+│   ├── ECG_handler.py
 │   └── gen_subtitles.py
+│
+├── ui/
+│   ├── task_descriptor.py
+│   ├── task_ui_registry.py
+│   └── theme.py
 │
 ├── widgets/
 │   ├── __init__.py
@@ -62,7 +76,7 @@ this-project/
 └── install.py
 ```
 
-其中lib是可能依赖的动态库；configs内部为配置文件（显而易见）；modules内为逻辑代码部分；widgets内为UI页面的代码；main_window.py是主窗口的显示和初始化widgets内的页面类；main.py初始化main_window，绑定modules内的逻辑类。
+其中 `libs` 是可能依赖的动态库；`configs` 内部为文档和默认配置；`core` 负责任务注册、懒加载、参数构建和共享 CLI；`modules` 内为任务实现；`ui` 内为展示层元数据和主题；`widgets` 内为页面代码；`main_window.py` 负责主窗口显示和页面初始化；`main.py` 负责把 GUI 和核心任务系统绑定起来。
 
 ## 1.1 从哪里讲起
 
@@ -82,5 +96,6 @@ this-project/
 但由于其为批量处理，譬如扫描文件类型，创建多线程任务，捕捉错误或者正确消息传递给UI界面等功能是通用的，所以我抽象除了files_basic.py，其中的类FilesBasic作为这些功能性文件的基类：
 
 1. 重写single_file_handler函数就可以集成FilesBasic的批量处理流程中。
-2. 在main函数中仿照其他几个类实例化并绑定几个信号连接就可以将该功能集成到UI中。
-3. 在AppSettings和setting.json中仿照其他几个类的参数添加你的类的初始化参数，就可以实现在UI界面中修改参数的功能。
+2. 在 `core/task_registry.py` 中注册 `TaskSpec`，再在 `ui/task_ui_registry.py` 中补齐图标元数据，就可以把该功能接入 UI。
+3. 在 `core/task_registry.py` 中为该任务补齐 `settings` schema，就可以自动生成默认配置、参数校验和设置页表单；不需要再手改 `modules/app_settings.py`。
+4. 如果任务要支持命令行入口，在模块底部的 `if __name__ == '__main__':` 中委托给 `core.task_cli.run_task_cli()` 即可，不再为每个任务维护独立的交互式 `main()`。

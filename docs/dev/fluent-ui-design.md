@@ -335,52 +335,63 @@ QSS 目前只用于“应用级规则”，主要解决：
 
 ### 7.4 任务元数据模型
 
-任务列表不再使用匿名元组，而是统一使用 `TaskDescriptor`：
+任务列表不再使用匿名元组，而是统一使用 `TaskSpec + TaskDescriptor` 两层模型：
 
 ```python
 @dataclass(frozen=True, slots=True)
-class TaskDescriptor:
+class TaskSpec:
     key: str
     title: str
     description: str
-    icon: Any
-    operation_cls: type
+    module_path: str
+    class_name: str
     default_params: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class TaskDescriptor:
+    task_spec: TaskSpec
+    icon: Any
 ```
 
 字段职责：
 
 - `key`
-  - 任务的唯一内部标识
+  - 稳定的任务标识，也是配置分组名
 - `title`
-  - UI 展示标题
+  - 同时供 GUI 和 CLI 展示的标题
 - `description`
-  - 右侧详情区的说明文案
+  - GUI 详情区和 CLI 提示都可复用的说明文案
+- `module_path` / `class_name`
+  - 运行时懒加载任务类所需的最小信息
 - `icon`
-  - 列表图标
-- `operation_cls`
-  - 对应的业务处理类
+  - GUI 展示元数据，不进入核心 registry
 - `default_params`
   - 默认参数补丁
 
 ### 7.5 任务注册流程
 
-任务注册在 `main.py` 中完成。
+任务注册真相源不再放在 `main.py`，而是拆成：
+
+- `core/task_registry.py`
+- `ui/task_ui_registry.py`
 
 流程如下：
 
-1. 构造 `TaskDescriptor`
-2. 调用 `register_batch_operation()`
-3. 通过 `AppSettings.get_class_params()` 取配置参数
-4. 用 `default_params` 补足默认值
-5. 实例化业务处理类
-6. 用 `BatchFilesBinding` 包一层线程执行逻辑
-7. 把信号接到 `FileWindow`
-8. 把任务注册到左侧任务列表
+1. 从 `core.task_registry` 读取 `TaskSpec`
+2. 从 `ui.task_ui_registry` 补齐图标并生成 `TaskDescriptor`
+3. 调用 `register_batch_operation()`
+4. 运行时用 `TaskLoader` 懒加载业务处理类
+5. 通过 `core.task_params.build_task_params()` 取配置并补齐默认参数
+6. 实例化业务处理类
+7. 用 `BatchFilesBinding` 包一层线程执行逻辑
+8. 把信号接到 `FileWindow`
+9. 把任务注册到左侧任务列表
 
 这样做的优点是：
 
 - UI 和业务处理类通过 descriptor 解耦
+- GUI 和 CLI 可以共享同一份核心任务注册与参数构建逻辑
 - 后续新增任务时，不需要改页面布局逻辑
 - 同一任务的说明、图标、执行行为集中管理
 
@@ -461,10 +472,12 @@ class TaskDescriptor:
 
 如果要新增设置项，建议按以下顺序：
 
-1. 在 `configs/settings.json` 中新增字段
-2. 在 `modules/app_settings.py` 中对应的 `*_Settingmap` 里增加映射
-3. 确保字段名和业务类接收参数一致，或者清楚地做好映射
-4. 打开设置页验证该字段是否自动生成
+1. 在 schema 定义里新增字段：
+   任务参数放到 `core/task_registry.py` 的 `TaskSpec.settings`
+   通用参数放到 `core/settings_schema.py`
+2. 确保字段默认值、类型、选项和业务类接收参数一致
+3. 打开设置页验证该字段是否自动生成
+4. 运行 schema 快照测试，确认 `configs/settings.json` 与生成结果一致
 
 如果新增的是一种新的输入类型，而不是布尔/枚举/文本之一，则再考虑新增新的卡片适配组件。
 

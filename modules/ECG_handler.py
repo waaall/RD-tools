@@ -81,9 +81,6 @@ def _get_signal_filters():
         _FILTFILT = filtfilt
     return _BUTTER, _FILTFILT
 
-# 获取当前文件所在目录,并加入系统环境变量(临时)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(current_dir))
 from modules.files_basic import FilesBasic
 
 
@@ -701,41 +698,7 @@ class ECGHandler(FilesBasic):
             self.send_message(traceback.format_exc())
 
 
-# =====================main(单独执行时使用)=====================
-def main():
-    # 获取用户输入的路径
-    input_path = input("请复制实验文件夹所在目录的绝对路径(若Python代码在同一目录, 请直接按Enter): \n")
-
-    # 判断用户是否直接按Enter, 设置为当前工作目录
-    if not input_path:
-        work_folder = os.getcwd()
-    elif os.path.isdir(input_path):
-        work_folder = input_path
-
-    ecg_handler = ECGHandler(filter_low_cut=0.2, filter_high_cut=30.0, filter_order=4)
-
-    ecg_handler.set_work_folder(work_folder)
-    possble_dirs = ecg_handler.possble_dirs
-
-    # 给用户显示, 请用户输入index
-    number = len(possble_dirs)
-    ecg_handler.send_message('\n')
-    for i in range(number):
-        print(f"{i}: {possble_dirs[i]}")
-    user_input = input("\n请选择要处理的序号(用空格分隔多个序号): \n")
-
-    # 解析用户输入
-    try:
-        indices = user_input.split()
-        index_list = [int(index) for index in indices]
-    except ValueError:
-        ecg_handler.send_message("输入错误, 必须输入数字")
-
-    RESULT = ecg_handler.selected_dirs_handler(index_list)
-    if not RESULT:
-        ecg_handler.send_message("输入数字不在提供范围, 请重新运行")
-
-
-# =========================调试用============================
 if __name__ == '__main__':
-    main()
+    from core.task_cli import run_task_cli
+
+    raise SystemExit(run_task_cli('ecg-handler', operation_cls=ECGHandler))
