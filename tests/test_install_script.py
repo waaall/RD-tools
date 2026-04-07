@@ -50,6 +50,13 @@ class InstallScriptTests(unittest.TestCase):
         self.assertEqual(posix_python, Path("/tmp/build-env/bin/python"))
         self.assertEqual(windows_python, Path("C:/build-env/Scripts/python.exe"))
 
+    def test_registered_task_module_paths_follow_task_registry(self):
+        module_paths = install._registered_task_module_paths()
+
+        self.assertIn("modules.files_renamer", module_paths)
+        self.assertIn("modules.gen_subtitles", module_paths)
+        self.assertEqual(len(module_paths), len(set(module_paths)))
+
     def test_build_pyinstaller_command_uses_build_python_and_excludes_optional_modules(self):
         command = install._build_pyinstaller_command(
             python_executable=Path("/tmp/build-env/bin/python"),
@@ -58,6 +65,8 @@ class InstallScriptTests(unittest.TestCase):
         )
 
         self.assertEqual(command[:3], ["/tmp/build-env/bin/python", "-m", "PyInstaller"])
+        self.assertIn("--hidden-import=modules.files_renamer", command)
+        self.assertIn("--hidden-import=modules.gen_subtitles", command)
         self.assertIn("--collect-submodules=pydicom", command)
         self.assertIn("--name=RD_Tool", command)
         self.assertIn("ui/qss", " ".join(command))
@@ -66,16 +75,25 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("faster_whisper", command)
 
     def test_build_executable_runs_pyinstaller_from_build_venv(self):
-        build_venv_dir = install.ROOT_DIR / ".venv-build-darwin-arm64"
-        expected_python = build_venv_dir / "bin" / "python"
+        expected_python = install.ROOT_DIR / ".venv-build-darwin-arm64" / "bin" / "python"
+        expected_env = {
+            "PYINSTALLER_CONFIG_DIR": str(install.PYINSTALLER_CONFIG_DIR),
+            "MPLCONFIGDIR": str(install.MPLCONFIG_DIR),
+        }
 
-        with patch("install.setup_build_env", return_value=build_venv_dir), patch(
+        with patch(
             "install.platform.system",
             return_value="Darwin",
+        ), patch(
+            "install._ensure_build_python",
+            return_value=expected_python,
         ), patch(
             "install._build_pyinstaller_command",
             return_value=["pyinstaller-command"],
         ) as mocked_builder, patch(
+            "install._build_process_env",
+            return_value=expected_env,
+        ), patch(
             "install.subprocess.check_call",
         ) as mocked_check_call:
             install.build_executable()
@@ -85,7 +103,7 @@ class InstallScriptTests(unittest.TestCase):
             current_platform="Darwin",
             include_transcription_stack=False,
         )
-        mocked_check_call.assert_called_once_with(["pyinstaller-command"])
+        mocked_check_call.assert_called_once_with(["pyinstaller-command"], env=expected_env)
 
 
 if __name__ == "__main__":

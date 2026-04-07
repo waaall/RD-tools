@@ -29,6 +29,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from core.task_registry import get_task_specs
+
 
 ROOT_DIR = Path(__file__).resolve().parent
 REQUIREMENTS_DIR = ROOT_DIR / "requirements"
@@ -40,6 +42,8 @@ WINDOWS_OPENH264_DLL = ROOT_DIR / "libs" / "openh264-1.8.0-win64.dll"
 APP_NAME = "RD_Tool"
 BUILD_VENV_PREFIX = ".venv-build"
 BUILD_VENV_ENV = "RD_TOOLS_BUILD_VENV"
+PYINSTALLER_CONFIG_DIR = ROOT_DIR / ".pyinstaller-cache"
+MPLCONFIG_DIR = ROOT_DIR / ".mplconfig"
 INCLUDE_TRANSCRIPTION_ENV = "RD_TOOLS_INCLUDE_TRANSCRIPTION"
 DEFAULT_INCLUDE_TRANSCRIPTION = False
 TRANSCRIPTION_REQUIREMENTS = ("faster-whisper",)
@@ -121,6 +125,16 @@ def _extend_command_with_resource_data(command: list[str], current_platform: str
         command.extend(["--add-data", f"{source_path}{separator}{target_dir}"])
 
 
+def _registered_task_module_paths() -> list[str]:
+    module_paths: list[str] = []
+    for spec in get_task_specs():
+        # 任务模块是通过注册表里的字符串在运行时动态导入的，
+        # PyInstaller 静态分析看不到这类依赖，所以这里统一收集。
+        if spec.module_path not in module_paths:
+            module_paths.append(spec.module_path)
+    return module_paths
+
+
 def _selected_requirement_files(
     include_transcription: bool,
     include_build_tools: bool = False,
@@ -184,6 +198,8 @@ def setup_build_env() -> Path:
         print(f"Creating build venv: {build_venv_dir}")
         subprocess.check_call([sys.executable, "-m", "venv", str(build_venv_dir)])
 
+    # 打包环境必须和当前开发解释器解耦，否则别的项目装进来的包和 hook
+    # 也会参与 PyInstaller 分析，重新带回“环境臃肿”和噪音 warning。
     subprocess.check_call([str(build_python), "-m", "pip", "install", "--upgrade", "pip"])
     _print_transcription_profile(include_transcription, "Build env setup")
     requirement_files = _selected_requirement_files(
@@ -193,6 +209,30 @@ def setup_build_env() -> Path:
     _install_requirement_files(build_python, requirement_files)
     print(f"Build env ready: {build_venv_dir}")
     return build_venv_dir
+
+
+def _ensure_build_python(current_platform: str) -> Path:
+    build_venv_dir = _resolve_build_venv_dir()
+    build_python = _venv_python_path(build_venv_dir, current_platform=current_platform)
+    if build_python.exists():
+        # build 阶段优先复用已准备好的 build venv，
+        # 避免每次打包都重新触发 pip 联网安装。
+        print(f"Reusing build venv for build: {build_venv_dir}")
+        return build_python
+
+    setup_build_env()
+    if not build_python.exists():
+        raise FileNotFoundError(f"Build env python not found: {build_python}")
+    return build_python
+
+
+def _build_process_env() -> dict[str, str]:
+    env = os.environ.copy()
+    # 把 PyInstaller 和 Matplotlib 缓存放到仓库内可写目录，
+    # 避免用户目录权限和旧缓存影响构建结果。
+    env.setdefault("PYINSTALLER_CONFIG_DIR", str(PYINSTALLER_CONFIG_DIR))
+    env.setdefault("MPLCONFIGDIR", str(MPLCONFIG_DIR))
+    return env
 
 
 def _build_pyinstaller_command(
@@ -209,6 +249,11 @@ def _build_pyinstaller_command(
         "--windowed",
         "--hidden-import=cv2",
     ]
+
+    for module_path in _registered_task_module_paths():
+        # 这些任务模块不会在主入口静态 import，
+        # 必须显式作为 hidden import 交给 PyInstaller。
+        command.append(f"--hidden-import={module_path}")
 
     if current_platform == "Windows":
         if not WINDOWS_OPENH264_DLL.exists():
@@ -253,14 +298,13 @@ def build_executable() -> None:
             "to include faster-whisper/torch-related packaging."
         )
 
-    build_venv_dir = setup_build_env()
-    build_python = _venv_python_path(build_venv_dir, current_platform=current_platform)
+    build_python = _ensure_build_python(current_platform)
     command = _build_pyinstaller_command(
         python_executable=build_python,
         current_platform=current_platform,
         include_transcription_stack=include_transcription_stack,
     )
-    subprocess.check_call(command)
+    subprocess.check_call(command, env=_build_process_env())
 
 
 def _print_help() -> None:
