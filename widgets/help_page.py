@@ -6,13 +6,14 @@ import sys
 from PySide6.QtWidgets import QApplication, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, CaptionLabel, CardWidget, SegmentedWidget, TitleLabel
 
+from core.resource_paths import resolve_resource_path
+
 
 class HelpWindow(QWidget):
     def __init__(self):
         super().__init__()
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.doc_dir = os.path.join(base_dir, 'configs')
+        self.doc_dir = resolve_resource_path('configs')
 
         self.setObjectName('AppPage')
         self._build_ui()

@@ -37,6 +37,7 @@ from qfluentwidgets import (
 )
 
 from core import MessageLevel, TaskMessage, ensure_task_message
+from core.resource_paths import resolve_resource_path
 from ui.task_descriptor import TaskDescriptor
 
 
@@ -583,7 +584,7 @@ class FileWindow(QWidget):
         self.edit_settings_button.setToolTip('打开当前任务的设置项。' if has_settings else '')
 
     def _apply_task_settings_button_theme(self):
-        qss_root = Path(__file__).resolve().parent.parent / 'ui' / 'qss'
+        qss_root = resolve_resource_path('ui', 'qss')
         light_qss = (qss_root / 'light' / 'task_settings_button.qss').read_text(encoding='utf-8')
         dark_qss = (qss_root / 'dark' / 'task_settings_button.qss').read_text(encoding='utf-8')
         setCustomStyleSheet(self.edit_settings_button, light_qss, dark_qss)

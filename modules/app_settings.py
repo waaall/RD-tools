@@ -7,6 +7,7 @@ from copy import deepcopy
 from PySide6.QtCore import QObject, Signal
 
 from core.config_health import ConfigHealth, ConfigHealthIssue
+from core.resource_paths import resolve_resource_path
 from core.settings_schema import (
     SettingFieldSpec,
     build_default_settings_payload,
@@ -422,8 +423,7 @@ class AppSettings(QObject):
             return None
 
     def _resolve_default_settings_file(self) -> str:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        return os.path.join(base_dir, 'configs', 'settings.json')
+        return str(resolve_resource_path('configs', 'settings.json'))
 
     def _resolve_user_settings_file(self) -> str:
         user_home = os.environ.get("HOME", "")

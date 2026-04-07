@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 
 import darkdetect
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import StyleSheetBase, Theme, qconfig, setTheme, setThemeColor
+
+from core.resource_paths import resolve_resource_path
 
 
 APP_THEME_COLOR = "#29526f"
@@ -32,8 +33,7 @@ class AppStyleSheet(StyleSheetBase, Enum):
 
     def path(self, theme: Theme = Theme.AUTO):
         active_theme = qconfig.theme if theme == Theme.AUTO else theme
-        base_dir = Path(__file__).resolve().parent
-        return str(base_dir / 'qss' / active_theme.value.lower() / f'{self.value}.qss')
+        return str(resolve_resource_path('ui', 'qss', active_theme.value.lower(), f'{self.value}.qss'))
 
 
 TOKENS = AppThemeTokens()

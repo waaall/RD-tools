@@ -44,6 +44,10 @@ EXCLUDED_TRANSCRIPTION_MODULES = (
     "tokenizers",
     "transformers",
 )
+RESOURCE_DATA_DIRECTORIES = (
+    ("ui/qss", "ui/qss"),
+    ("configs", "configs"),
+)
 
 
 def _env_flag_enabled(env_name: str, default: bool = False) -> bool:
@@ -73,6 +77,17 @@ def _read_requirements(requirements_file: Path) -> list[str]:
             continue
         requirements.append(line)
     return requirements
+
+
+def _pyinstaller_data_separator(current_platform: str) -> str:
+    return ";" if current_platform == "Windows" else ":"
+
+
+def _extend_command_with_resource_data(command: list[str], current_platform: str) -> None:
+    separator = _pyinstaller_data_separator(current_platform)
+    for source_dir, target_dir in RESOURCE_DATA_DIRECTORIES:
+        source_path = ROOT_DIR / source_dir
+        command.extend(["--add-data", f"{source_path}{separator}{target_dir}"])
 
 
 def _resolve_requirements_for_current_platform() -> list[str]:
@@ -130,11 +145,13 @@ def build_executable():
             raise FileNotFoundError(f"Missing required DLL: {WINDOWS_OPENH264_DLL}")
         command = [sys.executable, "-m", "PyInstaller",
                    "--onedir",  # 生成一个文件夹,内部包含所有运行所需文件
+                   "--noconfirm",
                    "--windowed",
                    "--hidden-import=cv2",
                    "--collect-submodules=pydicom", # 确保 pydicom 所需模块被包含
                    "--add-data", f"{WINDOWS_OPENH264_DLL};libs",  # dll添加到 libs 文件夹
                    f"--name={APP_NAME}"]
+        _extend_command_with_resource_data(command, current_platform)
         if not include_transcription_stack:
             for module_name in EXCLUDED_TRANSCRIPTION_MODULES:
                 command.extend(["--exclude-module", module_name])
@@ -143,10 +160,12 @@ def build_executable():
     elif current_platform == "Darwin":
         command = [sys.executable, "-m", "PyInstaller",
                    "--onedir",  # macOS GUI 应用优先使用 onedir，避免 onefile 与 .app 的冲突
+                   "--noconfirm",
                    "--windowed",
                    "--hidden-import=cv2",
                    "--collect-submodules=pydicom", # 确保 pydicom 所需模块被包含
                    f"--name={APP_NAME}"]
+        _extend_command_with_resource_data(command, current_platform)
         if not include_transcription_stack:
             for module_name in EXCLUDED_TRANSCRIPTION_MODULES:
                 command.extend(["--exclude-module", module_name])
@@ -155,11 +174,13 @@ def build_executable():
     elif current_platform == "Linux":
         command = [sys.executable, "-m", "PyInstaller",
                    "--onedir",
+                   "--noconfirm",
                    "--windowed",
                    "--hidden-import=pydicom",
                    "--hidden-import=cv2",
                    "--collect-submodules=pydicom",
                    f"--name={APP_NAME}"]
+        _extend_command_with_resource_data(command, current_platform)
         if not include_transcription_stack:
             for module_name in EXCLUDED_TRANSCRIPTION_MODULES:
                 command.extend(["--exclude-module", module_name])
