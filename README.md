@@ -75,20 +75,38 @@ Note: Specialized for niche use cases.
 ## How to install
 
 1. Install [Python](https://www.python.org/downloads/) (make sure to add it to the environment variables).
-2. (Optional) Create and activate a Python virtual environment.
-3. install python third party libs by running the following command in terminal (select1)
-
-```bash
-python install.py
-```
-
-4. Install [ffmpeg](https://www.ffmpeg.org/download.html) (make sure to add it to the environment variables).
-5. install [git](https://git-scm.com/downloads) (make sure to add it to the environment variables).
-6. open terminal in a folder you like, and running the following command in terminal
+2. Install [ffmpeg](https://www.ffmpeg.org/download.html) (make sure to add it to the environment variables).
+3. Install [git](https://git-scm.com/downloads) (make sure to add it to the environment variables).
+4. Clone the repository:
 
 ```bash
 git clone https://github.com/waaall/RD-tools.git
+cd RD-tools
 ```
+
+5. For normal source execution, install runtime dependencies into your current Python environment:
+
+```bash
+python install.py install-runtime
+```
+
+You can also run `python install.py` and select `1`.
+
+6. For packaging, create or update the isolated build venv:
+
+```bash
+python install.py setup-build-env
+```
+
+The default build venv path is `.venv-build-<platform>-<arch>`.
+
+7. Build the executable from that isolated build venv:
+
+```bash
+python install.py build
+```
+
+You can also run `python install.py` and select `3`.
 
 ## How to update
 

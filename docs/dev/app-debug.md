@@ -151,27 +151,36 @@ open -W dist/RD_Tool.app
 
 ### 下一轮建议的验证顺序
 
-#### A. 重新打包
+#### A. 先准备隔离的 build venv
 
 ```bash
-python install.py
+python install.py setup-build-env
 ```
 
-菜单选 `2`
+#### B. 再重新打包
 
-#### B. 先看资源是否真的进包
+```bash
+python install.py build
+```
+
+如果走交互菜单:
+
+1. 先选 `2` 创建或更新 build venv
+2. 再选 `3` 打包
+
+#### C. 先看资源是否真的进包
 
 ```bash
 find dist/RD_Tool.app -path '*ui/qss*' -o -path '*configs*' | sort
 ```
 
-#### C. 再测启动行为
+#### D. 再测启动行为
 
 ```bash
 open -W dist/RD_Tool.app
 ```
 
-#### D. 如果还退出, 再抓系统日志
+#### E. 如果还退出, 再抓系统日志
 
 ```bash
 /usr/bin/log show --style compact --last 1m --predicate 'process == "RD_Tool" OR senderImagePath CONTAINS "RD_Tool" OR eventMessage CONTAINS "RD_Tool"'
@@ -185,4 +194,3 @@ open -W dist/RD_Tool.app
 - `rapidfuzz.__pyinstaller:get_hook_dirs` 的 warning 还在
 - `matplotlib` 缓存目录不可写会拖慢分析阶段
 - 如果未来要分发给其他机器, 还需要处理 Developer ID 签名和 notarization
-
