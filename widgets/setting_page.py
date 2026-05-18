@@ -34,18 +34,14 @@ from qfluentwidgets import (
     TitleLabel,
 )
 
+from core.i18n import LANGUAGE_EN, LANGUAGE_OPTIONS, LANGUAGE_SYSTEM, LANGUAGE_ZH
+from core.setting_texts import humanize_setting_key, translate_option_label, translate_setting_text
 from modules.app_settings import AppSettings
 from ui.task_descriptor import TaskDescriptor
 
 
 def humanize_setting_label(value: str) -> str:
-    parts = value.replace('-', '_').split('_')
-    words = []
-    for part in parts:
-        if not part:
-            continue
-        words.append(part if part.isupper() else part.capitalize())
-    return ' '.join(words)
+    return humanize_setting_key(value)
 
 
 class AppLineEditSettingCard(SettingCard):
@@ -70,27 +66,36 @@ class AppLineEditSettingCard(SettingCard):
 class AppComboBoxSettingCard(SettingCard):
     valueChanged = Signal(object)
 
-    def __init__(self, icon, title: str, content: str | None = None, options: list[Any] | None = None, value: Any = None, parent=None):
+    def __init__(self, icon, title: str, content: str | None = None, options: list[Any] | None = None, value: Any = None, labels: dict | None = None, parent=None):
         super().__init__(icon, title, content, parent)
         self.combo_box = ComboBox(self)
         self.combo_box.setFixedWidth(220)
         self.hBoxLayout.addWidget(self.combo_box, 0, Qt.AlignRight)
         self.hBoxLayout.addSpacing(16)
-        self._options = options or []
+        self._options = list(options or [])
+        # 显示标签与存储值分离:语言等设置存稳定值,下拉显示本地化文案
+        self._labels = dict(labels or {})
 
         for option in self._options:
-            self.combo_box.addItem(str(option), userData=option)
+            self.combo_box.addItem(self._display_label(option), userData=option)
 
-        if value in self._options:
-            self.combo_box.setCurrentText(str(value))
-
+        self.setValue(value)
         self.combo_box.currentIndexChanged.connect(self._emit_current_value)
+
+    def _display_label(self, option: Any) -> str:
+        return self._labels.get(option, str(option))
 
     def _emit_current_value(self, index: int):
         self.valueChanged.emit(self.combo_box.itemData(index))
 
     def setValue(self, value: Any):
-        self.combo_box.setCurrentText(str(value))
+        for index in range(self.combo_box.count()):
+            if self.combo_box.itemData(index) == value:
+                # 程序化设值不触发 valueChanged,避免重置下拉时信号回环
+                self.combo_box.blockSignals(True)
+                self.combo_box.setCurrentIndex(index)
+                self.combo_box.blockSignals(False)
+                return
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +202,7 @@ class SettingsSplitView(QWidget):
 class SettingWindow(QWidget):
     notification_requested = Signal(str, str, str)
     theme_changed = Signal(str)
+    language_changed = Signal(str)
     settings_reloaded = Signal()
 
     CATEGORY_ICONS = {
@@ -215,6 +221,8 @@ class SettingWindow(QWidget):
         self.main_categories = []
         self.general_categories = []
         self._configured_task_keys: set[str] = set()
+        self._language_card: AppComboBoxSettingCard | None = None
+        self._language_change_enabled = True
 
         self.setObjectName('AppPage')
         self._build_ui()
@@ -227,15 +235,15 @@ class SettingWindow(QWidget):
         main_layout.setContentsMargins(24, 24, 24, 24)
         main_layout.setSpacing(16)
 
-        eyebrow = CaptionLabel('SETTINGS', self)
+        eyebrow = CaptionLabel(self.tr('SETTINGS'), self)
         eyebrow.setObjectName('PageEyebrow')
         main_layout.addWidget(eyebrow)
 
-        title = TitleLabel('设置', self)
+        title = TitleLabel(self.tr('Settings'), self)
         title.setObjectName('PageTitle')
         main_layout.addWidget(title)
 
-        description = BodyLabel('设置项变更即时写回配置文件。通用设置与任务设置共享同一套侧栏 + 详情布局，任务配置按稳定 task key 绑定。', self)
+        description = BodyLabel(self.tr('Setting changes are saved immediately. General and task settings share one sidebar + detail layout; task config binds to a stable task key.'), self)
         description.setObjectName('PageDescription')
         description.setWordWrap(True)
         main_layout.addWidget(description)
@@ -246,7 +254,7 @@ class SettingWindow(QWidget):
         health_layout.setContentsMargins(16, 16, 16, 16)
         health_layout.setSpacing(10)
 
-        self.config_health_title = SubtitleLabel('配置告警', self.config_health_card)
+        self.config_health_title = SubtitleLabel(self.tr('Config warnings'), self.config_health_card)
         health_layout.addWidget(self.config_health_title)
 
         self.config_health_body = BodyLabel('', self.config_health_card)
@@ -255,7 +263,7 @@ class SettingWindow(QWidget):
 
         button_row = QHBoxLayout()
         button_row.addStretch(1)
-        self.reset_defaults_button = PrimaryPushButton('恢复默认配置', self.config_health_card)
+        self.reset_defaults_button = PrimaryPushButton(self.tr('Restore defaults'), self.config_health_card)
         self.reset_defaults_button.clicked.connect(self._reset_user_settings_to_defaults)
         button_row.addWidget(self.reset_defaults_button)
         health_layout.addLayout(button_row)
@@ -264,13 +272,13 @@ class SettingWindow(QWidget):
 
         self.segmented_widget = SegmentedWidget(self)
         self.segmented_widget.setObjectName('SegmentHost')
-        self.segmented_widget.addItem('general', '通用设置', lambda: self._switch_panel(self.general_view, 'general'))
-        self.segmented_widget.addItem('tasks', '任务设置', lambda: self._switch_panel(self.task_view, 'tasks'))
+        self.segmented_widget.addItem('general', self.tr('General'), lambda: self._switch_panel(self.general_view, 'general'))
+        self.segmented_widget.addItem('tasks', self.tr('Tasks'), lambda: self._switch_panel(self.task_view, 'tasks'))
         main_layout.addWidget(self.segmented_widget, 0, Qt.AlignLeft)
 
         self.panel_stack = QStackedWidget(self)
-        self.general_view = SettingsSplitView('通用设置', 'General 与 Network 按分类呈现，Display 已并入 General 作为子分组。', self)
-        self.task_view = SettingsSplitView('任务设置', '只显示存在独立设置项的任务，顺序、标题和图标与任务页保持一致。', self)
+        self.general_view = SettingsSplitView(self.tr('General settings'), self.tr('General and Network are shown by category; Display is merged into General as a subgroup.'), self)
+        self.task_view = SettingsSplitView(self.tr('Task settings'), self.tr('Only tasks with their own settings are shown; order, title, and icons match the task page.'), self)
         self.panel_stack.addWidget(self.general_view)
         self.panel_stack.addWidget(self.task_view)
         main_layout.addWidget(self.panel_stack, stretch=1)
@@ -286,7 +294,11 @@ class SettingWindow(QWidget):
 
     def _populate_navigation(self):
         general_items = [
-            SettingsNavItem(key=category_name, title=category_name, icon=self.CATEGORY_ICONS.get(category_name, FIF.SETTING))
+            SettingsNavItem(
+                key=category_name,
+                title=translate_setting_text(category_name),
+                icon=self.CATEGORY_ICONS.get(category_name, FIF.SETTING),
+            )
             for category_name in self.general_categories
         ]
         self.general_view.set_nav_items(general_items)
@@ -315,7 +327,7 @@ class SettingWindow(QWidget):
 
         if self.panel_stack.currentWidget() is self.task_view:
             if self.task_view.nav_list.count() == 0:
-                self.task_view.show_empty_state('暂无任务设置', '当前没有可映射到 Batch_Files 的任务配置。')
+                self.task_view.show_empty_state(self.tr('No task settings'), self.tr('No task config maps to Batch_Files right now.'))
                 return
 
             # 任务中心改顺序后，设置页尽量保持用户当前查看的任务不变。
@@ -326,7 +338,7 @@ class SettingWindow(QWidget):
 
         if self.panel_stack.currentWidget() is self.general_view:
             if self.general_view.nav_list.count() == 0:
-                self.general_view.show_empty_state('暂无通用设置', '当前未找到可显示的通用设置分类。')
+                self.general_view.show_empty_state(self.tr('No general settings'), self.tr('No general setting categories to display.'))
                 return
 
             if current_general_key is not None and self._select_nav_item(self.general_view, current_general_key):
@@ -338,13 +350,15 @@ class SettingWindow(QWidget):
         self.segmented_widget.setCurrentItem(key)
         if view.nav_list.count() == 0:
             if view is self.task_view:
-                view.show_empty_state('暂无任务设置', '当前没有可映射到 Batch_Files 的任务配置。')
+                view.show_empty_state(self.tr('No task settings'), self.tr('No task config maps to Batch_Files right now.'))
             else:
-                view.show_empty_state('暂无通用设置', '当前未找到可显示的通用设置分类。')
+                view.show_empty_state(self.tr('No general settings'), self.tr('No general setting categories to display.'))
             return
         view.ensure_selection()
 
     def _render_general_category(self, category_name: str):
+        # 语言卡片随分类切换销毁重建,重置引用避免悬空
+        self._language_card = None
         entries = self.settings.get_setting_entries(category_name)
         grouped_entries = self._group_entries(entries, start_index=1, default_group_title=category_name)
         icon = self.CATEGORY_ICONS.get(category_name, FIF.SETTING)
@@ -353,7 +367,7 @@ class SettingWindow(QWidget):
     def _render_task_settings(self, task_key: str):
         descriptor = self._task_descriptor_map.get(task_key)
         if descriptor is None:
-            self.task_view.show_empty_state('任务不存在', '未找到当前任务的元数据。')
+            self.task_view.show_empty_state(self.tr('Task not found'), self.tr('No metadata found for this task.'))
             return
 
         entries = self.settings.get_setting_entries('Batch_Files', group_name=descriptor.key)
@@ -368,7 +382,8 @@ class SettingWindow(QWidget):
 
         lines = config_health.format_lines()
         self.config_health_body.setText(
-            "检测到配置文件解析或校验问题，当前已回退到 schema 默认值继续运行。\n\n"
+            self.tr('Detected config file parse or validation issues; the app fell back to schema defaults to keep running.')
+            + "\n\n"
             + "\n".join(f"• {line}" for line in lines)
         )
         self.config_health_card.show()
@@ -376,19 +391,19 @@ class SettingWindow(QWidget):
     def _render_grouped_entries(self, view: SettingsSplitView, grouped_entries: list[tuple[str, list[dict[str, Any]]]], icon):
         view.clear_detail()
         if not grouped_entries:
-            view.show_empty_state('暂无设置项', '当前选择下没有可展示的设置项。')
+            view.show_empty_state(self.tr('No settings'), self.tr('No settings to display for the current selection.'))
             return
 
         for group_title, entries in grouped_entries:
             group = SettingCardGroup(group_title, view.detail_container)
             for entry in entries:
-                title = self._humanize(entry['path'][-1])
+                title = translate_setting_text(entry['path'][-1])
                 card = self._build_setting_card(
                     name=entry['name'],
                     value=entry['value'],
                     options=entry['options'],
-                    title=entry.get('label') or title,
-                    content=entry.get('description'),
+                    title=translate_setting_text(entry.get('label')) if entry.get('label') else title,
+                    content=translate_setting_text(entry.get('description')) if entry.get('description') else None,
                     icon=icon,
                     parent=view.detail_container,
                 )
@@ -399,10 +414,10 @@ class SettingWindow(QWidget):
 
     def _group_entries(self, entries: list[dict[str, Any]], start_index: int, default_group_title: str):
         grouped_entries: dict[str, list[dict[str, Any]]] = {}
-        default_title = self._humanize(default_group_title)
+        default_title = translate_setting_text(default_group_title)
         for entry in entries:
             path = entry['path']
-            group_title = ' / '.join(self._humanize(part) for part in path[start_index:-1]) or default_title
+            group_title = ' / '.join(translate_setting_text(part) for part in path[start_index:-1]) or default_title
             grouped_entries.setdefault(group_title, []).append(entry)
         return list(grouped_entries.items())
 
@@ -420,6 +435,8 @@ class SettingWindow(QWidget):
         return self._select_nav_item(self.task_view, task_key)
 
     def _build_setting_card(self, name: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon, parent=None):
+        if name == 'language':
+            return self._build_language_card(value, icon, parent or self)
         if options is not None:
             if options and all(isinstance(option, bool) for option in options):
                 card = SwitchSettingCard(icon, title, content, parent=parent or self)
@@ -427,7 +444,8 @@ class SettingWindow(QWidget):
                 card.checkedChanged.connect(lambda checked, setting_name=name: self.update_setting(setting_name, checked))
                 return card
 
-            card = AppComboBoxSettingCard(icon, title, content, options=options, value=value, parent=parent or self)
+            labels = {option: translate_option_label(name, option) for option in options}
+            card = AppComboBoxSettingCard(icon, title, content, options=options, value=value, labels=labels, parent=parent or self)
             card.valueChanged.connect(lambda selected, setting_name=name: self.update_setting(setting_name, selected))
             return card
 
@@ -437,14 +455,52 @@ class SettingWindow(QWidget):
         card.valueChanged.connect(lambda text, setting_name=name: self.update_setting(setting_name, text))
         return card
 
+    def _build_language_card(self, value: Any, icon, parent) -> AppComboBoxSettingCard:
+        # 语言卡片不走 update_setting:切换由 AppController 决策,成功后才落盘
+        card = AppComboBoxSettingCard(
+            icon,
+            self.tr('Display language'),
+            None,
+            options=list(LANGUAGE_OPTIONS),
+            value=value,
+            labels=self._language_option_labels(),
+            parent=parent,
+        )
+        card.valueChanged.connect(self._on_language_selected)
+        card.setEnabled(self._language_change_enabled)
+        self._language_card = card
+        return card
+
+    def _language_option_labels(self) -> dict[str, str]:
+        # 语言名用本族语写法,只有“跟随系统”随界面语言翻译
+        return {
+            LANGUAGE_SYSTEM: self.tr('Follow system'),
+            LANGUAGE_ZH: '简体中文',
+            LANGUAGE_EN: 'English',
+        }
+
+    def _on_language_selected(self, mode: str):
+        self.language_changed.emit(mode)
+
+    def set_language_value(self, mode: str):
+        # 控制器拒绝切换时把下拉恢复到当前实际语言
+        if self._language_card is not None:
+            self._language_card.setValue(mode)
+
+    def set_language_change_enabled(self, enabled: bool):
+        """任务运行期间禁用语言切换，避免重建窗口打断任务。"""
+        self._language_change_enabled = enabled
+        if self._language_card is not None:
+            self._language_card.setEnabled(enabled)
+
     def update_setting(self, name: str, value):
         if not hasattr(self.settings, name):
-            self.notification_requested.emit('error', '设置保存失败', f'未找到配置项: {name}')
+            self.notification_requested.emit('error', self.tr('Failed to save setting'), self.tr('Setting not found: {0}').format(name))
             return
 
         # 真实状态以 AppSettings.save_settings() 的提交结果为准，避免先改内存、后写文件失败留下脏值。
         if not self.settings.save_settings(name, value):
-            self.notification_requested.emit('error', '设置保存失败', f'{self._humanize(name)} 无法写回配置文件。')
+            self.notification_requested.emit('error', self.tr('Failed to save setting'), self.tr('{0} could not be written to the config file.').format(translate_setting_text(name)))
             return
 
         if name == 'theme':
@@ -452,12 +508,12 @@ class SettingWindow(QWidget):
 
     def _reset_user_settings_to_defaults(self):
         dialog = MessageBox(
-            '恢复默认配置',
-            '这会覆盖用户目录下的 settings.json，并丢弃当前自定义设置。是否继续？',
+            self.tr('Restore defaults'),
+            self.tr('This overwrites settings.json in your user directory and discards your current customizations. Continue?'),
             self,
         )
-        dialog.yesButton.setText('确认覆盖')
-        dialog.cancelButton.setText('取消')
+        dialog.yesButton.setText(self.tr('Overwrite'))
+        dialog.cancelButton.setText(self.tr('Cancel'))
         if not dialog.exec():
             return
 
@@ -472,7 +528,7 @@ class SettingWindow(QWidget):
             current_task_key = current_task_item.data(Qt.UserRole)
 
         if not self.settings.reset_user_settings_to_defaults():
-            self.notification_requested.emit('error', '恢复默认配置失败', '用户配置文件无法写回默认值。')
+            self.notification_requested.emit('error', self.tr('Failed to restore defaults'), self.tr('Could not write defaults to the user config file.'))
             return
 
         self._refresh_from_settings()
@@ -489,11 +545,11 @@ class SettingWindow(QWidget):
 
         self.settings_reloaded.emit()
         self.theme_changed.emit(str(self.settings.theme))
-        self.notification_requested.emit('success', '恢复默认配置成功', '用户配置文件已重建为 schema 默认值。')
+        self.notification_requested.emit('success', self.tr('Defaults restored'), self.tr('The user config file has been rebuilt with schema defaults.'))
 
     @staticmethod
     def _humanize(value: str) -> str:
-        return humanize_setting_label(value)
+        return translate_setting_text(value)
 
     @staticmethod
     def _select_nav_item(view: SettingsSplitView, item_key: str) -> bool:

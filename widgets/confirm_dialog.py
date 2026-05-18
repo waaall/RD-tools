@@ -18,23 +18,23 @@ class TaskExecutionConfirmDialog(MessageBoxBase):
 
         super().__init__(parent=dialog_parent)
 
-        self.yesButton.setText('确认执行')
-        self.cancelButton.setText('取消')
+        self.yesButton.setText(self.tr('Run'))
+        self.cancelButton.setText(self.tr('Cancel'))
 
         self._build_ui(task_title, selected_dirs, settings_lines or [])
 
     def _build_ui(self, task_title: str, selected_dirs: list[str], settings_lines: list[str]):
-        title = SubtitleLabel(f'执行任务: {task_title}', self.widget)
+        title = SubtitleLabel(self.tr('Run task: {0}').format(task_title), self.widget)
         title.setObjectName('TaskConfirmTitle')
         self.viewLayout.addWidget(title)
 
-        hint = BodyLabel('确认当前设置和目标目录后开始执行。', self.widget)
+        hint = BodyLabel(self.tr('Review the current settings and target directories, then start.'), self.widget)
         hint.setObjectName('TaskConfirmHint')
         hint.setWordWrap(True)
         self.viewLayout.addWidget(hint)
 
         if settings_lines:
-            settings_title = BodyLabel('当前设置', self.widget)
+            settings_title = BodyLabel(self.tr('Current settings'), self.widget)
             settings_title.setObjectName('TaskConfirmSectionTitle')
             self.viewLayout.addWidget(settings_title)
 
@@ -45,7 +45,7 @@ class TaskExecutionConfirmDialog(MessageBoxBase):
             settings_view.setFixedHeight(180)
             self.viewLayout.addWidget(settings_view)
 
-        dirs_title = BodyLabel('勾选文件夹列表', self.widget)
+        dirs_title = BodyLabel(self.tr('Selected folders'), self.widget)
         dirs_title.setObjectName('TaskConfirmSectionTitle')
         self.viewLayout.addWidget(dirs_title)
 

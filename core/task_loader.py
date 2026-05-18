@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib
 import threading
 
+from core.task_errors import TaskErrorCode, TaskUserError
+
 
 class TaskLoader:
     _class_cache: dict[tuple[str, str], type] = {}
@@ -16,11 +18,22 @@ class TaskLoader:
             if cached_class is not None:
                 return cached_class
 
-            module = importlib.import_module(module_path)
+            try:
+                module = importlib.import_module(module_path)
+            except Exception as exc:
+                raise TaskUserError(
+                    TaskErrorCode.MODULE_LOAD_FAILED,
+                    {'module_path': module_path},
+                    detail=str(exc),
+                ) from exc
             try:
                 task_class = getattr(module, class_name)
             except AttributeError as exc:
-                raise ImportError(f'模块 {module_path} 中不存在类 {class_name}') from exc
+                raise TaskUserError(
+                    TaskErrorCode.CLASS_NOT_FOUND,
+                    {'module_path': module_path, 'class_name': class_name},
+                    detail=str(exc),
+                ) from exc
 
             cls._class_cache[cache_key] = task_class
             return task_class

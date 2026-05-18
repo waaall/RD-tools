@@ -24,22 +24,22 @@ class HelpWindow(QWidget):
         main_layout.setContentsMargins(24, 24, 24, 24)
         main_layout.setSpacing(16)
 
-        eyebrow = CaptionLabel('DOCUMENTATION', self)
+        eyebrow = CaptionLabel(self.tr('DOCUMENTATION'), self)
         eyebrow.setObjectName('PageEyebrow')
         main_layout.addWidget(eyebrow)
 
-        title = TitleLabel('帮助', self)
+        title = TitleLabel(self.tr('Help'), self)
         title.setObjectName('PageTitle')
         main_layout.addWidget(title)
 
-        description = BodyLabel('继续沿用 Markdown 文档源，只把阅读和切换体验统一到 Fluent 界面里。', self)
+        description = BodyLabel(self.tr('Reads the Markdown documentation in a unified Fluent interface.'), self)
         description.setObjectName('PageDescription')
         description.setWordWrap(True)
         main_layout.addWidget(description)
 
         self.segmented = SegmentedWidget(self)
-        self.segmented.addItem('user', '用户文档', self.show_user_manual)
-        self.segmented.addItem('dev', '开发文档', self.show_develop_manual)
+        self.segmented.addItem('user', self.tr('User manual'), self.show_user_manual)
+        self.segmented.addItem('dev', self.tr('Developer manual'), self.show_develop_manual)
         self.segmented.setCurrentItem('user')
         main_layout.addWidget(self.segmented, 0)
 
@@ -49,7 +49,7 @@ class HelpWindow(QWidget):
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(12)
 
-        hint = CaptionLabel('文档中的外部链接会继续使用系统浏览器打开。', self.doc_card)
+        hint = CaptionLabel(self.tr('External links in the docs open in your system browser.'), self.doc_card)
         hint.setObjectName('DocHint')
         hint.setWordWrap(True)
         card_layout.addWidget(hint)
@@ -84,9 +84,9 @@ class HelpWindow(QWidget):
             with open(file_path, 'r', encoding='utf-8') as file:
                 browser.setMarkdown(file.read())
         except FileNotFoundError:
-            browser.setMarkdown(f'Error: File {file_path} not found.')
+            browser.setMarkdown(self.tr('Error: file {0} not found.').format(file_path))
         except Exception as exc:
-            browser.setMarkdown(f'Error reading file {file_path}: {exc}')
+            browser.setMarkdown(self.tr('Error reading file {0}: {1}').format(file_path, exc))
 
 
 if __name__ == '__main__':

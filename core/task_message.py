@@ -16,13 +16,24 @@ class MessageLevel(str, Enum):
         normalized = text.strip().lower()
         if normalized.startswith('traceback (most recent call last):'):
             return cls.ERROR
-        if normalized.startswith(('error:', 'Error', 'error', '错误')):
+        if normalized.startswith(('error:', 'error：', 'failed:', 'failure:', 'exception:', '错误')):
             return cls.ERROR
-        if normalized.startswith(('warning:', 'Warning', 'warning', '警告', '注意')):
+        if normalized.startswith(('warning:', 'warning：', 'warn:', '警告', '注意')):
             return cls.WARNING
-        if normalized.startswith(('success:', 'Success', 'success', '成功')):
+        if normalized.startswith(('success:', 'success!', 'success：', '成功')):
             return cls.SUCCESS
-        if any(keyword in normalized for keyword in ('出错', '失败', '异常', '无法')):
+        if any(keyword in normalized for keyword in (
+            'failed',
+            'failure',
+            'exception',
+            'unable to',
+            'cannot ',
+            "can't ",
+            '出错',
+            '失败',
+            '异常',
+            '无法',
+        )):
             return cls.ERROR
         return cls.INFO
 
@@ -54,9 +65,9 @@ class TaskMessage:
         stripped_text = text.lstrip()
         normalized = stripped_text.lower()
         prefix_map = {
-            MessageLevel.ERROR: ('error:', 'error：', '错误:', '错误：'),
+            MessageLevel.ERROR: ('error:', 'error：', 'failed:', 'failure:', 'exception:', '错误:', '错误：'),
             MessageLevel.WARNING: ('warning:', 'warning：', '警告:', '警告：', '注意:', '注意：'),
-            MessageLevel.SUCCESS: ('success:', 'success!', '成功:', '成功：'),
+            MessageLevel.SUCCESS: ('success:', 'success!', 'success：', '成功:', '成功：'),
         }
         for prefix in prefix_map.get(level, ()):
             if normalized.startswith(prefix):

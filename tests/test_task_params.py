@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from modules.app_settings import AppSettings
+from core.task_errors import TaskErrorCode, TaskUserError
 from modules.files_basic import FilesBasic
 from core.task_params import build_task_params
 from core.task_registry import TaskSpec
@@ -113,8 +114,10 @@ class TaskParamsTests(unittest.TestCase):
             class_name="DummyTask",
         )
 
-        with self.assertRaisesRegex(ValueError, "未知参数"):
+        with self.assertRaises(TaskUserError) as context:
             build_task_params(task_spec, settings, DummyTask)
+        self.assertEqual(context.exception.code, TaskErrorCode.UNKNOWN_PARAMS)
+        self.assertEqual(context.exception.params["params"], "unknown_value")
 
     def test_build_task_params_rejects_missing_required_params(self):
         settings = FakeSettings()
@@ -126,8 +129,10 @@ class TaskParamsTests(unittest.TestCase):
             class_name="RequiredTask",
         )
 
-        with self.assertRaisesRegex(ValueError, "缺少必填参数"):
+        with self.assertRaises(TaskUserError) as context:
             build_task_params(task_spec, settings, RequiredTask)
+        self.assertEqual(context.exception.code, TaskErrorCode.MISSING_PARAMS)
+        self.assertEqual(context.exception.params["params"], "required_value")
 
     def test_build_task_params_lets_ctor_defaults_fill_remaining_values(self):
         settings = FakeSettings()

@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from core.i18n import LANGUAGE_OPTIONS, LANGUAGE_SYSTEM, coerce_language
 from core.task_registry import TaskSettingSpec, get_task_specs
 
 
@@ -91,9 +92,10 @@ def _build_general_settings() -> tuple[SettingFieldSpec, ...]:
             "language",
             "General",
             "language",
-            "English",
+            LANGUAGE_SYSTEM,
             str,
-            options=("English", "French", "Spanish"),
+            options=LANGUAGE_OPTIONS,
+            coerce=coerce_language,
         ),
         _setting(
             "launch_maximized",

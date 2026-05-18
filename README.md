@@ -1,137 +1,115 @@
 # RD-tools
 
-this is a modular app that can handle some repetitive tasks in the RD process
+[English](README.md) | [简体中文](README_ZH.md)
 
-## Functions
+RD-tools is a modular desktop utility for repetitive research-and-development workflows. It provides a PySide6 GUI, shared task settings, and optional CLI entry points for individual batch-processing tasks.
+
+## Features
+
+- **Unified task center**: select one working directory, choose subdirectories, and run registered batch tasks from one UI.
+- **Persistent settings**: GUI and CLI share `~/Develop/RD-tools-configs/settings.json`.
+- **Task-specific configuration**: tasks expose typed settings through a schema-driven settings page.
+- **Bilingual UI**: English source strings with optional Simplified Chinese Qt translations.
+- **Packaging support**: PyInstaller build flow with resource bundling for styles, configs, and translations.
+
+## Available tasks
 
 ### DICOM Processing
-Module Function: Converts medical imaging DICOM files into images or videos, saving them in folders mirroring the original DICOMDIR hierarchy.
 
-#### UI Workflow
-Select the working directory, which should be the grandparent directory of the DICOMDIR file.
-Tick the target subdirectories in the checkbox list.
-Find the DICOM Processing task card in the File window.
-Click the "Execute Task" button on that card.
-Monitor the dedicated log in the same card. A "SUCCESS! log file saved." message indicates completion.
-
-#### CLI Workflow
-Run the task module through Python's module entrypoint:
-
-```bash
-python -m modules.dicom_to_imgs
-```
-
-This CLI path uses the same user settings file as the GUI and follows the same parameter assembly logic.
-
-Customization: If your DICOM file structure differs from the assumed hierarchy, rewrite the main function in dicom_to_imgs.py by leveraging the DicomToImage class and base functions in file_basic.py to tailor processing for your specific structure.
+Converts DICOM series into images and, when needed, videos. Select the parent directory that contains DICOM data folders, choose target subdirectories, run **DICOM Processing**, and monitor the task log.
 
 ### ECG Signal Processing
-Module Function: Processes single-lead ECG data (saved as CSV files) from an electrode, generating the following outputs:
 
-Raw data: Time-domain and frequency-domain plots.
-Primary filtered data: Time-domain, frequency-domain, and comparison plots.
-Advanced processing:
-- R-wave peak detection.
-- PQRST waveform detection.
-- Heart rate calculation.
-
-Steps:
-Set the sampling rate (default: 1000 Hz) to match your data.
-Select the parent directory of the ECG data folder as the working directory.
-Tick the target subdirectories in the checkbox list and run the ECG task card.
-
+Processes single-lead ECG CSV data and generates raw, filtered, and advanced analysis charts. Set the sampling rate to match your data before running the task.
 
 ### Bilibili Video Export
-Function: Batch exports cached Bilibili app videos into MP4 format (similar to yt-dlp but optimized for cached files).
-Reference: BilibiliCacheVideoMergePython.
 
+Repairs and merges cached Bilibili app video files into playable MP4 files.
 
-### Caption Generation
-Core: Modified implementation based on VideoCaptioner.
-Features:
+### Subtitle Generation
 
-Supports local configuration of whisper models (e.g., faster-whisper for PotPlayer).
-Requires manual setup of dependencies:
-whisper-cpp (Linux/Mac recommended).
-faster-whisper (Windows recommended).
-Limitations:
-Translation functionality is removed.
+Extracts audio from media files and generates SRT subtitles with a local Whisper-compatible toolchain. Optional transcription dependencies are excluded from the default packaged build.
 
+### RGB Channel Split / Merge
 
-### RGB Channel Decomposition/Synthesis
-Functions:
-- SplitColors: Separates RGB channels of images (useful for fluorescence-labeled images).
-- MergeColors: Merges specified channels (e.g., R+G) from image pairs into composite images.
+Splits RGB image channels or merges channel pairs such as R/G/B fluorescence images into composite color results.
 
+### Image Perspective Transform
 
-### TwistImgs
-Function: Applies perspective distortion to images, creating quadrilateral visual effects (useful for custom poster designs or scene mockups).
-Note: Specialized for niche use cases.
+Applies a preset quadrilateral perspective transform to images.
 
+### Batch Rename
 
-### more is comming
+Renames files in bulk with prefix, full-name, body, or between-boundary matching rules.
 
+### Mac Cleaner
 
-## How to install
+Removes common macOS metadata and junk files from selected directories.
 
-1. Install [Python](https://www.python.org/downloads/) (make sure to add it to the environment variables).
-2. Install [ffmpeg](https://www.ffmpeg.org/download.html) (make sure to add it to the environment variables).
-3. Install [git](https://git-scm.com/downloads) (make sure to add it to the environment variables).
-4. Clone the repository:
+## Install and run from source
+
+1. Install [Python](https://www.python.org/downloads/), [ffmpeg](https://www.ffmpeg.org/download.html), and [git](https://git-scm.com/downloads).
+2. Clone the repository:
 
 ```bash
 git clone https://github.com/waaall/RD-tools.git
 cd RD-tools
 ```
 
-5. For normal source execution, install runtime dependencies into your current Python environment:
+3. Install runtime dependencies:
 
 ```bash
 python install.py install-runtime
 ```
 
-You can also run `python install.py` and select `1`.
-
-6. For packaging, create or update the isolated build venv:
-
-```bash
-python install.py setup-build-env
-```
-
-The default build venv path is `.venv-build-<platform>-<arch>`.
-
-7. Build the executable from that isolated build venv:
-
-```bash
-python install.py build
-```
-
-You can also run `python install.py` and select `3`.
-
-## How to update
-
-open terminal in the `RD-tools` folder, and running the following command in terminal
-
-```bash
-git pull
-```
-
-NOTICE: if you change the code, maybe have errors when you running `git pull` command. You need to learn how to fix the git conflict.Since you have modified the code, I assume you possess many fundamental skills, such as being proficient in Git and Python; otherwise, you can reinstall.
-
-## How to Use
-
- start this app by running the following command in terminal.
+4. Start the GUI:
 
 ```bash
 python main.py
 ```
 
-Run a single task from terminal with:
+You can also run selected task modules from the terminal, for example:
 
 ```bash
 python -m modules.gen_subtitles
 ```
 
-GUI and CLI both read the same user settings from `~/Develop/RD-tools-configs/settings.json`.
+## Build executable
 
-For more details, please refer to the Help window within the app.
+Create or update the isolated build environment:
+
+```bash
+python install.py setup-build-env
+```
+
+Compile translations manually when needed:
+
+```bash
+python install.py compile-translations
+```
+
+Build the executable:
+
+```bash
+python install.py build
+```
+
+`python install.py build` compiles `i18n/*.ts` into `.qm` before invoking PyInstaller. The build bundles `ui/qss`, `configs`, and `i18n` resources.
+
+Optional transcription dependencies are skipped by default. To include them in a packaged build, run:
+
+```bash
+RD_TOOLS_INCLUDE_TRANSCRIPTION=1 python install.py build
+```
+
+## Update
+
+```bash
+git pull
+```
+
+If you have local changes, resolve any Git conflicts before running or building the app.
+
+## Documentation
+
+Open the Help page in the app for task manuals and developer notes. The in-app manuals are intentionally kept as existing Markdown documents for now.

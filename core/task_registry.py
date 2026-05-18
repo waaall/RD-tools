@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from PySide6.QtCore import QT_TRANSLATE_NOOP
+
 
 @dataclass(frozen=True, slots=True)
 class TaskSettingSpec:
@@ -56,8 +58,8 @@ class TaskSpec:
 _TASK_SPECS = (
     TaskSpec(
         key='files-renamer',
-        title='批量重命名',
-        description='按 prefix / all / body / between 规则批量重命名文件。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Batch Rename'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Batch rename files using prefix / all / body / between rules.'),
         module_path='modules.files_renamer',
         class_name='FilesRenamer',
         settings=(
@@ -81,8 +83,8 @@ _TASK_SPECS = (
     ),
     TaskSpec(
         key='bilibili-export',
-        title='B站视频导出',
-        description='批量修复并合并 Bilibili 缓存视频为可播放 MP4。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Bilibili Video Export'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Batch repair and merge cached Bilibili videos into playable MP4 files.'),
         module_path='modules.bili_videos',
         class_name='BiliVideos',
         settings=(
@@ -100,8 +102,8 @@ _TASK_SPECS = (
     ),
     TaskSpec(
         key='subtitle-generation',
-        title='字幕生成',
-        description='对音视频文件批量抽取音频并生成 SRT 字幕。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Subtitle Generation'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Batch extract audio from media files and generate SRT subtitles.'),
         module_path='modules.gen_subtitles',
         class_name='GenSubtitles',
         settings=(
@@ -112,15 +114,15 @@ _TASK_SPECS = (
     ),
     TaskSpec(
         key='mac-cleaner',
-        title='Mac铲屎官',
-        description='批量清理指定目录下的系统垃圾文件。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Mac Cleaner'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Batch clean system junk files under the selected directories.'),
         module_path='modules.mac_poop_scooper',
         class_name='MacPoopScooper',
     ),
     TaskSpec(
         key='merge-colors',
-        title='颜色通道合成',
-        description='按文件名前缀配对 R/G/B 图像，并合成新的彩色结果图。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Merge Color Channels'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Pair R/G/B images by filename prefix and merge them into composite color images.'),
         module_path='modules.merge_colors',
         class_name='MergeColors',
         default_params={'colors': ['R', 'G']},
@@ -131,24 +133,24 @@ _TASK_SPECS = (
     ),
     TaskSpec(
         key='split-colors',
-        title='分离颜色通道',
-        description='把输入图片拆分为独立的 R/G/B 通道输出。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Split Color Channels'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Split input images into separate R/G/B channels.'),
         module_path='modules.split_colors',
         class_name='SplitColors',
         default_params={'colors': ['R', 'G']},
     ),
     TaskSpec(
         key='twist-images',
-        title='图片视角变换',
-        description='按预设四边形参数对图片做透视变换。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'Image Perspective Transform'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Apply a perspective transform to images using preset quadrilateral parameters.'),
         module_path='modules.twist_shape',
         class_name='TwistImgs',
         default_params={'twisted_corner': [[0, 0], [430, 82], [432, 268], [0, 276]]},
     ),
     TaskSpec(
         key='ecg-handler',
-        title='ECG信号处理',
-        description='分析 ECG CSV 数据，生成原始、滤波和高级分析图表。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'ECG Signal Processing'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Analyze ECG CSV data and generate raw, filtered, and advanced analysis charts.'),
         module_path='modules.ECG_handler',
         class_name='ECGHandler',
         settings=(
@@ -169,8 +171,8 @@ _TASK_SPECS = (
     ),
     TaskSpec(
         key='dicom-processing',
-        title='DICOM处理',
-        description='批量读取 DICOM 序列，导出图片并在需要时生成视频。',
+        title=QT_TRANSLATE_NOOP('Tasks', 'DICOM Processing'),
+        description=QT_TRANSLATE_NOOP('Tasks', 'Batch read DICOM series, export images, and generate videos when needed.'),
         module_path='modules.dicom_to_imgs',
         class_name='DicomToImage',
         settings=(

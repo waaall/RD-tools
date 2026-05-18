@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 
+from core.task_errors import TaskErrorCode, TaskUserError
 from modules.app_settings import AppSettings
 from modules.files_basic import FilesBasic
 from core.task_registry import TaskSpec
@@ -17,7 +18,11 @@ def build_task_params(
         if not issubclass(operation_cls, FilesBasic):
             raise TypeError
     except TypeError as exc:
-        raise TypeError(f'{task_spec.key} 对应的任务类必须继承 FilesBasic。') from exc
+        raise TaskUserError(
+            TaskErrorCode.INVALID_TASK_CLASS_BASE,
+            {'task_key': task_spec.key},
+            detail=str(exc) or None,
+        ) from exc
 
     resolved_params: dict[str, object] = dict(task_spec.default_params)
     for key, value in settings.get_group_values('Batch_Files', task_spec.key).items():
@@ -45,14 +50,16 @@ def build_task_params(
 
     unknown_params = sorted(key for key in resolved_params if key not in accepted_params)
     if unknown_params and not accepts_var_kwargs:
-        raise ValueError(
-            f'{task_spec.key} 的配置包含未知参数: {", ".join(unknown_params)}'
+        raise TaskUserError(
+            TaskErrorCode.UNKNOWN_PARAMS,
+            {'task_key': task_spec.key, 'params': ', '.join(unknown_params)},
         )
 
     missing_params = sorted(name for name in required_params if name not in resolved_params)
     if missing_params:
-        raise ValueError(
-            f'{task_spec.key} 缺少必填参数: {", ".join(missing_params)}'
+        raise TaskUserError(
+            TaskErrorCode.MISSING_PARAMS,
+            {'task_key': task_spec.key, 'params': ', '.join(missing_params)},
         )
 
     return resolved_params

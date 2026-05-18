@@ -98,20 +98,20 @@ class FileWindow(QWidget):
         main_layout.setContentsMargins(24, 24, 24, 24)
         main_layout.setSpacing(16)
 
-        eyebrow = CaptionLabel('TASK CENTER', self)
+        eyebrow = CaptionLabel(self.tr('TASK CENTER'), self)
         eyebrow.setObjectName('PageEyebrow')
         main_layout.addWidget(eyebrow)
 
-        title = TitleLabel('任务中心', self)
+        title = TitleLabel(self.tr('Task Center'), self)
         title.setObjectName('PageTitle')
         main_layout.addWidget(title)
 
-        description = BodyLabel('所有任务共享同一份工作目录和处理范围，页面只负责统一调度、状态反馈和日志查看。', self)
+        description = BodyLabel(self.tr('All tasks share one working directory and processing scope; this page only handles unified scheduling, status feedback, and log viewing.'), self)
         description.setObjectName('PageDescription')
         description.setWordWrap(True)
         main_layout.addWidget(description)
 
-        self.work_folder_summary_label = CaptionLabel('当前未选择工作目录。', self)
+        self.work_folder_summary_label = CaptionLabel(self.tr('No working directory selected.'), self)
         self.work_folder_summary_label.setObjectName('SummaryLabel')
         self.work_folder_summary_label.setWordWrap(True)
         main_layout.addWidget(self.work_folder_summary_label)
@@ -128,10 +128,10 @@ class FileWindow(QWidget):
         task_list_layout.setContentsMargins(16, 16, 16, 16)
         task_list_layout.setSpacing(12)
 
-        task_list_title = SubtitleLabel('任务列表', self.task_list_card)
+        task_list_title = SubtitleLabel(self.tr('Task list'), self.task_list_card)
         task_list_layout.addWidget(task_list_title)
 
-        task_list_hint = CaptionLabel('按住后可直接拖拽调整显示顺序；切换任务不会丢失各自日志，运行中的任务会在列表里标记。', self.task_list_card)
+        task_list_hint = CaptionLabel(self.tr('Drag items to reorder them; switching tasks keeps each log, and running tasks are marked in the list.'), self.task_list_card)
         task_list_hint.setObjectName('SectionHint')
         task_list_hint.setWordWrap(True)
         task_list_layout.addWidget(task_list_hint)
@@ -153,10 +153,10 @@ class FileWindow(QWidget):
         overview_layout.setContentsMargins(16, 16, 16, 16)
         overview_layout.setSpacing(12)
 
-        self.task_title_label = SubtitleLabel('请选择任务', self.overview_card)
+        self.task_title_label = SubtitleLabel(self.tr('Select a task'), self.overview_card)
         overview_layout.addWidget(self.task_title_label)
 
-        self.task_description_label = BodyLabel('左侧列表中选中一个任务后，这里会展示任务说明和执行状态。', self.overview_card)
+        self.task_description_label = BodyLabel(self.tr('Select a task from the list on the left to see its description and run status here.'), self.overview_card)
         self.task_description_label.setWordWrap(True)
         overview_layout.addWidget(self.task_description_label)
 
@@ -167,26 +167,26 @@ class FileWindow(QWidget):
         self.running_ring.hide()
         status_layout.addWidget(self.running_ring, 0, Qt.AlignVCenter)
 
-        self.task_state_label = StrongBodyLabel('待执行', self.overview_card)
+        self.task_state_label = StrongBodyLabel(self.tr('Pending'), self.overview_card)
         self.task_state_label.setObjectName('TaskStateLabel')
         status_layout.addWidget(self.task_state_label, 0, Qt.AlignVCenter)
         status_layout.addStretch(1)
 
         self.edit_settings_button = PrimaryPushButton(self.overview_card)
         self.edit_settings_button.setObjectName('TaskSettingsButton')
-        self.edit_settings_button.setText('修改设置')
+        self.edit_settings_button.setText(self.tr('Edit settings'))
         self.edit_settings_button.clicked.connect(self._open_current_task_settings)
         self._apply_task_settings_button_theme()
         self.edit_settings_button.hide()
         status_layout.addWidget(self.edit_settings_button)
 
         self.run_button = PrimaryPushButton(self.overview_card)
-        self.run_button.setText('执行任务')
+        self.run_button.setText(self.tr('Run task'))
         self.run_button.clicked.connect(self._run_current_task)
         status_layout.addWidget(self.run_button)
 
         self.clear_log_button = PushButton(self.overview_card)
-        self.clear_log_button.setText('清空日志')
+        self.clear_log_button.setText(self.tr('Clear log'))
         self.clear_log_button.clicked.connect(self._clear_current_log)
         status_layout.addWidget(self.clear_log_button)
 
@@ -214,8 +214,8 @@ class FileWindow(QWidget):
         self._build_log_page()
         self.segment_stack.addWidget(self.log_page)
 
-        self.segmented_widget.addItem('scope', '处理范围', lambda: self._switch_detail_page(self.range_page))
-        self.segmented_widget.addItem('log', '运行日志', lambda: self._switch_detail_page(self.log_page))
+        self.segmented_widget.addItem('scope', self.tr('Scope'), lambda: self._switch_detail_page(self.range_page))
+        self.segmented_widget.addItem('log', self.tr('Log'), lambda: self._switch_detail_page(self.log_page))
         self.segmented_widget.setCurrentItem('scope')
         self.segment_stack.setCurrentWidget(self.range_page)
 
@@ -226,7 +226,7 @@ class FileWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        hint = CaptionLabel('工作目录只保留一份；任务执行时会复用这里的子目录选择。', self.range_page)
+        hint = CaptionLabel(self.tr('Only one working directory is kept; tasks reuse the subdirectory selection here when they run.'), self.range_page)
         hint.setObjectName('SectionHint')
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -234,30 +234,30 @@ class FileWindow(QWidget):
         path_layout = QHBoxLayout()
         path_layout.setSpacing(12)
         self.choose_folder_button = PushButton(self.range_page)
-        self.choose_folder_button.setText('选择工作目录')
+        self.choose_folder_button.setText(self.tr('Choose working directory'))
         self.choose_folder_button.clicked.connect(self._choose_work_folder)
         path_layout.addWidget(self.choose_folder_button)
 
         self.work_folder_display = LineEdit(self.range_page)
         self.work_folder_display.setReadOnly(True)
-        self.work_folder_display.setPlaceholderText('请选择需要批处理的根目录')
+        self.work_folder_display.setPlaceholderText(self.tr('Select the root directory to batch-process'))
         path_layout.addWidget(self.work_folder_display, stretch=1)
         layout.addLayout(path_layout)
 
         actions_layout = QHBoxLayout()
         actions_layout.setSpacing(12)
         self.select_all_button = PushButton(self.range_page)
-        self.select_all_button.setText('全选')
+        self.select_all_button.setText(self.tr('Select all'))
         self.select_all_button.clicked.connect(self.select_all_directories)
         actions_layout.addWidget(self.select_all_button)
 
         self.clear_selection_button = PushButton(self.range_page)
-        self.clear_selection_button.setText('清空选择')
+        self.clear_selection_button.setText(self.tr('Clear selection'))
         self.clear_selection_button.clicked.connect(self.clear_selected_directories)
         actions_layout.addWidget(self.clear_selection_button)
 
         actions_layout.addStretch(1)
-        self.selection_summary_label = CaptionLabel('请选择工作目录', self.range_page)
+        self.selection_summary_label = CaptionLabel(self.tr('Choose a working directory'), self.range_page)
         self.selection_summary_label.setObjectName('SelectionSummary')
         actions_layout.addWidget(self.selection_summary_label)
         layout.addLayout(actions_layout)
@@ -267,7 +267,7 @@ class FileWindow(QWidget):
         self.folder_list.itemChanged.connect(self._update_selection_summary)
         layout.addWidget(self.folder_list, stretch=1)
 
-        self.selection_status_label = CaptionLabel('未选择工作目录', self.range_page)
+        self.selection_status_label = CaptionLabel(self.tr('No working directory selected'), self.range_page)
         self.selection_status_label.setObjectName('SelectionStatus')
         self.selection_status_label.setWordWrap(True)
         layout.addWidget(self.selection_status_label)
@@ -278,7 +278,7 @@ class FileWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        hint = CaptionLabel('过程消息只记录到当前任务日志，不再依赖底部状态栏。', self.log_page)
+        hint = CaptionLabel(self.tr('Process messages are recorded only in the current task log, not in the bottom status bar.'), self.log_page)
         hint.setObjectName('SectionHint')
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -286,7 +286,7 @@ class FileWindow(QWidget):
         self.log_view = TextEdit(self.log_page)
         self.log_view.setObjectName('TaskLogView')
         self.log_view.setReadOnly(True)
-        self.log_view.setPlaceholderText('这里会显示当前任务的独立日志。')
+        self.log_view.setPlaceholderText(self.tr("The current task's log will appear here."))
         layout.addWidget(self.log_view, stretch=1)
 
     def register_task(
@@ -302,7 +302,7 @@ class FileWindow(QWidget):
         if open_settings_callback is not None:
             self._task_settings_callbacks[descriptor.key] = open_settings_callback
         self._operation_logs.setdefault(descriptor.key, [])
-        self._task_states.setdefault(descriptor.key, '待执行')
+        self._task_states.setdefault(descriptor.key, 'pending')
 
         item = QListWidgetItem(descriptor.title)
         item.setIcon(descriptor.icon.qicon())
@@ -327,12 +327,22 @@ class FileWindow(QWidget):
             self._select_task_item(current_key)
         self.task_order_changed.emit(ordered_keys)
 
+    def _state_label(self, state_key: str) -> str:
+        # 任务状态以稳定 key 存储,显示时按当前语言翻译
+        labels = {
+            'pending': self.tr('Pending'),
+            'running': self.tr('Running'),
+            'succeeded': self.tr('Last run succeeded'),
+            'failed': self.tr('Last run failed'),
+        }
+        return labels.get(state_key, labels['pending'])
+
     def _refresh_task_detail(self):
         descriptor = self.current_task_descriptor()
         if descriptor is None:
-            self.task_title_label.setText('请选择任务')
-            self.task_description_label.setText('左侧列表中选中一个任务后，这里会展示任务说明和执行状态。')
-            self.task_state_label.setText('待执行')
+            self.task_title_label.setText(self.tr('Select a task'))
+            self.task_description_label.setText(self.tr('Select a task from the list on the left to see its description and run status here.'))
+            self.task_state_label.setText(self._state_label('pending'))
             self.running_ring.stop()
             self.running_ring.hide()
             self.run_button.setEnabled(False)
@@ -342,7 +352,7 @@ class FileWindow(QWidget):
 
         self.task_title_label.setText(descriptor.title)
         self.task_description_label.setText(descriptor.description)
-        self.task_state_label.setText(self._task_states.get(descriptor.key, '待执行'))
+        self.task_state_label.setText(self._state_label(self._task_states.get(descriptor.key, 'pending')))
         is_running = descriptor.key in self._running_tasks
         self.running_ring.setVisible(is_running)
         if is_running:
@@ -432,9 +442,9 @@ class FileWindow(QWidget):
 
     def log_operation_start(self, task_key: str, work_folder: str, wanted_items: list[str]):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.append_operation_log(task_key, TaskMessage.build(f'[{timestamp}] 开始执行'))
-        self.append_operation_log(task_key, TaskMessage.build(f'工作目录: {work_folder}'))
-        self.append_operation_log(task_key, TaskMessage.build(f"目标目录: {', '.join(wanted_items)}"))
+        self.append_operation_log(task_key, TaskMessage.build(self.tr('[{0}] Run started').format(timestamp)))
+        self.append_operation_log(task_key, TaskMessage.build(self.tr('Working directory: {0}').format(work_folder)))
+        self.append_operation_log(task_key, TaskMessage.build(self.tr('Target directories: {0}').format(', '.join(wanted_items))))
 
     def get_selected_directories(self):
         selected_dirs = []
@@ -450,7 +460,7 @@ class FileWindow(QWidget):
 
     def notify_blocking_issue(self, message: str):
         descriptor = self.current_task_descriptor()
-        title = descriptor.title if descriptor else '任务中心'
+        title = descriptor.title if descriptor else self.tr('Task Center')
         self.notification_requested.emit('error', title, message)
 
     def select_all_directories(self):
@@ -466,17 +476,17 @@ class FileWindow(QWidget):
     def _update_selection_summary(self, _item=None):
         total_count = self.folder_list.count()
         if total_count == 0:
-            self.selection_summary_label.setText('当前目录下没有可选子目录')
+            self.selection_summary_label.setText(self.tr('No selectable subdirectories in the current directory'))
             self._refresh_work_folder_summary()
             return
 
         selected_count = len(self.get_selected_directories()[1])
-        self.selection_summary_label.setText(f'已勾选 {selected_count} / {total_count} 个目录')
+        self.selection_summary_label.setText(self.tr('{0} / {1} directories selected').format(selected_count, total_count))
         self._refresh_work_folder_summary()
 
     def _choose_work_folder(self):
         start_dir = self._work_folder or os.getcwd()
-        selected_folder = QFileDialog.getExistingDirectory(self, '选择目录', start_dir)
+        selected_folder = QFileDialog.getExistingDirectory(self, self.tr('Choose a directory'), start_dir)
 
         if not selected_folder:
             return
@@ -497,8 +507,8 @@ class FileWindow(QWidget):
                 ]
             )
         except OSError as exc:
-            self.set_selection_status(f'读取目录失败: {exc}', is_error=True)
-            self.notification_requested.emit('error', '工作目录', f'无法读取目录内容: {exc}')
+            self.set_selection_status(self.tr('Failed to read directory: {0}').format(exc), is_error=True)
+            self.notification_requested.emit('error', self.tr('Working directory'), self.tr('Unable to read directory contents: {0}').format(exc))
             self._refresh_work_folder_summary()
             return
 
@@ -511,31 +521,34 @@ class FileWindow(QWidget):
 
         self._update_selection_summary()
         if self._work_folder_items:
-            self.set_selection_status(f'已加载 {len(self._work_folder_items)} 个可选目录。')
+            self.set_selection_status(self.tr('Loaded {0} selectable directories.').format(len(self._work_folder_items)))
         else:
-            self.set_selection_status('当前工作目录下没有可处理的一级子目录。', is_error=True)
+            self.set_selection_status(self.tr('The working directory has no first-level subdirectories to process.'), is_error=True)
 
         self._refresh_work_folder_summary()
 
     def _refresh_work_folder_summary(self):
         if not self._work_folder:
-            self.work_folder_summary_label.setText('当前未选择工作目录。')
+            self.work_folder_summary_label.setText(self.tr('No working directory selected.'))
             return
 
         total_count = self.folder_list.count()
         if total_count == 0:
-            self.work_folder_summary_label.setText(f'工作目录：{self._work_folder} · 当前没有可处理的一级子目录。')
+            self.work_folder_summary_label.setText(
+                self.tr('Working directory: {0} · no first-level subdirectories to process.').format(self._work_folder)
+            )
             return
 
         selected_count = len(self.get_selected_directories()[1])
         self.work_folder_summary_label.setText(
-            f'工作目录：{self._work_folder} · 已勾选 {selected_count} / {total_count} 个子目录。'
+            self.tr('Working directory: {0} · {1} / {2} subdirectories selected.').format(
+                self._work_folder, selected_count, total_count)
         )
 
     def set_task_running(self, task_key: str, is_running: bool):
         if is_running:
             self._running_tasks.add(task_key)
-            self._task_states[task_key] = '运行中'
+            self._task_states[task_key] = 'running'
             if task_key == self._current_task_key:
                 self.running_ring.start()
         else:
@@ -548,8 +561,8 @@ class FileWindow(QWidget):
 
     def finish_task(self, task_key: str, success: bool, message: str):
         descriptor = self._task_descriptors.get(task_key)
-        task_title = descriptor.title if descriptor else '任务'
-        self._task_states[task_key] = '上次运行完成' if success else '上次运行失败'
+        task_title = descriptor.title if descriptor else self.tr('Task')
+        self._task_states[task_key] = 'succeeded' if success else 'failed'
         self._update_task_item(task_key)
 
         if task_key == self._current_task_key:
@@ -568,7 +581,7 @@ class FileWindow(QWidget):
 
         title = descriptor.title
         if task_key in self._running_tasks:
-            title = f'{title} · 运行中'
+            title = self.tr('{0} · Running').format(title)
         item.setText(title)
 
     def _set_status_label_state(self, state: str):
@@ -581,7 +594,7 @@ class FileWindow(QWidget):
     def _update_settings_button_state(self, task_key: str):
         has_settings = self._task_has_settings.get(task_key, False)
         self.edit_settings_button.setVisible(has_settings)
-        self.edit_settings_button.setToolTip('打开当前任务的设置项。' if has_settings else '')
+        self.edit_settings_button.setToolTip(self.tr('Open settings for this task.') if has_settings else '')
 
     def _apply_task_settings_button_theme(self):
         qss_root = resolve_resource_path('ui', 'qss')

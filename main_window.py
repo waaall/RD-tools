@@ -58,9 +58,9 @@ class MainWindow(FluentWindow):
         self.HelpWindow = HelpWindow()
         self.HelpWindow.setObjectName('help-center')
 
-        self.addSubInterface(self.FileWindow, FIF.IOT, '任务中心', NavigationItemPosition.TOP)
-        self.addSubInterface(self.SettingWindow, FIF.SETTING, '设置', NavigationItemPosition.TOP)
-        self.addSubInterface(self.HelpWindow, FIF.HELP, '帮助', NavigationItemPosition.BOTTOM)
+        self.addSubInterface(self.FileWindow, FIF.IOT, self.tr('Task Center'), NavigationItemPosition.TOP)
+        self.addSubInterface(self.SettingWindow, FIF.SETTING, self.tr('Settings'), NavigationItemPosition.TOP)
+        self.addSubInterface(self.HelpWindow, FIF.HELP, self.tr('Help'), NavigationItemPosition.BOTTOM)
 
     def _connect_signals(self):
         self.FileWindow.notification_requested.connect(self.show_notification)
@@ -119,13 +119,13 @@ class MainWindow(FluentWindow):
         ]
         if len(reordered_descriptors) != len(self.task_descriptors):
             self.FileWindow.apply_task_order(previous_order)
-            self.show_notification('error', '任务顺序', '任务顺序同步失败：当前任务列表不完整。')
+            self.show_notification('error', self.tr('Task order'), self.tr('Failed to sync task order: the task list is incomplete.'))
             return
 
         if not self.settings.save_task_order(ordered_keys):
             # 配置写回失败时，界面必须和真实持久化状态保持一致，不能停留在“看起来成功”的顺序上。
             self.FileWindow.apply_task_order(previous_order)
-            self.show_notification('error', '任务顺序', '任务顺序无法写回配置文件。')
+            self.show_notification('error', self.tr('Task order'), self.tr('Failed to write the task order to the config file.'))
             return
 
         self.task_descriptors = reordered_descriptors

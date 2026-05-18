@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from PySide6.QtCore import QCoreApplication
+
 from core.task_registry import TaskSpec
 
 
@@ -19,11 +21,12 @@ class TaskDescriptor:
 
     @property
     def title(self) -> str:
-        return self.task_spec.title
+        # 任务标题是模块级数据,显示时按当前语言翻译
+        return QCoreApplication.translate('Tasks', self.task_spec.title)
 
     @property
     def description(self) -> str:
-        return self.task_spec.description
+        return QCoreApplication.translate('Tasks', self.task_spec.description)
 
     @property
     def module_path(self) -> str:

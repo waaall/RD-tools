@@ -25,6 +25,7 @@
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +39,8 @@ BASE_REQUIREMENTS_FILE = REQUIREMENTS_DIR / "base.txt"
 TRANSCRIPTION_REQUIREMENTS_FILE = REQUIREMENTS_DIR / "transcription.txt"
 BUILD_REQUIREMENTS_FILE = REQUIREMENTS_DIR / "build.txt"
 MAIN_FILE = ROOT_DIR / "main.py"
+I18N_DIR = ROOT_DIR / "i18n"
+I18N_TS_FILES = (I18N_DIR / "rdtools_zh_CN.ts",)
 WINDOWS_OPENH264_DLL = ROOT_DIR / "libs" / "openh264-1.8.0-win64.dll"
 APP_NAME = "RD_Tool"
 BUILD_VENV_PREFIX = ".venv-build"
@@ -60,8 +63,9 @@ EXCLUDED_TRANSCRIPTION_MODULES = (
 RESOURCE_DATA_DIRECTORIES = (
     ("ui/qss", "ui/qss"),
     ("configs", "configs"),
+    ("i18n", "i18n"),
 )
-CLI_ACTIONS = ("install-runtime", "setup-build-env", "build")
+CLI_ACTIONS = ("install-runtime", "setup-build-env", "compile-translations", "build")
 
 
 def _env_flag_enabled(env_name: str, default: bool = False) -> bool:
@@ -114,6 +118,21 @@ def _venv_python_path(venv_dir: Path, current_platform: str | None = None) -> Pa
     return venv_dir / "bin" / "python"
 
 
+def _qt_tool_path(python_executable: Path, tool_name: str, current_platform: str | None = None) -> Path:
+    """优先使用目标 Python 环境里的 Qt 工具，避免误用系统环境版本。"""
+    resolved_platform = current_platform or platform.system()
+    executable_name = f"{tool_name}.exe" if resolved_platform == "Windows" else tool_name
+    candidate = python_executable.parent / executable_name
+    if candidate.exists():
+        return candidate
+
+    fallback = shutil.which(tool_name)
+    if fallback:
+        return Path(fallback)
+
+    raise FileNotFoundError(f"Qt tool not found: {tool_name}")
+
+
 def _pyinstaller_data_separator(current_platform: str) -> str:
     return ";" if current_platform == "Windows" else ":"
 
@@ -122,6 +141,8 @@ def _extend_command_with_resource_data(command: list[str], current_platform: str
     separator = _pyinstaller_data_separator(current_platform)
     for source_dir, target_dir in RESOURCE_DATA_DIRECTORIES:
         source_path = ROOT_DIR / source_dir
+        if not source_path.exists():
+            raise FileNotFoundError(f"Missing resource data directory: {source_path}")
         command.extend(["--add-data", f"{source_path}{separator}{target_dir}"])
 
 
@@ -235,6 +256,17 @@ def _build_process_env() -> dict[str, str]:
     return env
 
 
+def compile_translations(python_executable: Path | None = None) -> None:
+    """把 i18n/*.ts 编译为 .qm；打包前必须执行。"""
+    resolved_python = python_executable or Path(sys.executable)
+    lrelease = _qt_tool_path(resolved_python, "pyside6-lrelease")
+    for ts_file in I18N_TS_FILES:
+        if not ts_file.exists():
+            raise FileNotFoundError(f"Missing translation source: {ts_file}")
+        qm_file = ts_file.with_suffix(".qm")
+        subprocess.check_call([str(lrelease), str(ts_file), "-qm", str(qm_file)])
+
+
 def _build_pyinstaller_command(
     python_executable: Path,
     current_platform: str,
@@ -299,6 +331,7 @@ def build_executable() -> None:
         )
 
     build_python = _ensure_build_python(current_platform)
+    compile_translations(build_python)
     command = _build_pyinstaller_command(
         python_executable=build_python,
         current_platform=current_platform,
@@ -321,6 +354,9 @@ def _run_cli_action(action: str) -> None:
     if action == "setup-build-env":
         setup_build_env()
         return
+    if action == "compile-translations":
+        compile_translations(Path(sys.executable))
+        return
     if action == "build":
         build_executable()
         return
@@ -332,8 +368,9 @@ def _run_interactive_menu() -> None:
         print("select wanted function:")
         print("\t1. Install Runtime Requirements")
         print("\t2. Create Or Update Build Env")
-        print("\t3. Build Executable (Build Env)")
-        print("\t4. Exit")
+        print("\t3. Compile Translations")
+        print("\t4. Build Executable (Build Env)")
+        print("\t5. Exit")
 
         try:
             choice = int(input("Enter the corresponding number:"))
@@ -342,8 +379,10 @@ def _run_interactive_menu() -> None:
             elif choice == 2:
                 setup_build_env()
             elif choice == 3:
-                build_executable()
+                compile_translations(Path(sys.executable))
             elif choice == 4:
+                build_executable()
+            elif choice == 5:
                 print("exit")
                 break
             else:

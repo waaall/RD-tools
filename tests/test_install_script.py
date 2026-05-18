@@ -71,6 +71,7 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("--name=RD_Tool", command)
         self.assertIn("ui/qss", " ".join(command))
         self.assertIn("configs", " ".join(command))
+        self.assertIn("i18n", " ".join(command))
         self.assertIn("--exclude-module", command)
         self.assertIn("faster_whisper", command)
 
@@ -94,10 +95,13 @@ class InstallScriptTests(unittest.TestCase):
             "install._build_process_env",
             return_value=expected_env,
         ), patch(
+            "install.compile_translations",
+        ) as mocked_compile_translations, patch(
             "install.subprocess.check_call",
         ) as mocked_check_call:
             install.build_executable()
 
+        mocked_compile_translations.assert_called_once_with(expected_python)
         mocked_builder.assert_called_once_with(
             python_executable=expected_python,
             current_platform="Darwin",

@@ -1,6 +1,6 @@
 {
     "General": {
-        "language": "English",
+        "language": "system",
         "Display": {
             "theme": "Auto",
             "launch_maximized": true

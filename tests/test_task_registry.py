@@ -18,7 +18,7 @@ class TaskRegistryTests(unittest.TestCase):
     def test_get_task_spec_by_key(self):
         spec = get_task_spec("subtitle-generation")
 
-        self.assertEqual(spec.title, "字幕生成")
+        self.assertEqual(spec.title, "Subtitle Generation")
         self.assertEqual(spec.module_path, "modules.gen_subtitles")
         self.assertEqual(spec.class_name, "GenSubtitles")
 
