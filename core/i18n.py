@@ -5,7 +5,9 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
+import sys
+
+from PySide6.QtCore import QLibraryInfo, QLocale, QSettings, QTranslator
 
 from core.resource_paths import resolve_resource_path
 
@@ -29,6 +31,12 @@ _LEGACY_LANGUAGE_ALIASES = {
     '简体中文': LANGUAGE_ZH,
 }
 
+# 支持的 UI 语言映射:按 BCP-47 主语言码归一化,避免把某个地区/脚本写死。
+_SUPPORTED_LOCALE_BY_LANGUAGE_CODE = {
+    'zh': LANGUAGE_ZH,
+    'en': LANGUAGE_EN,
+}
+
 
 def coerce_language(value: object) -> str:
     """把任意历史/非法 language 配置值规整成受支持的稳定值。
@@ -45,24 +53,62 @@ def coerce_language(value: object) -> str:
 def resolve_locale(language_mode: str) -> str:
     """把 language 设置解析成实际生效的 locale(zh_CN 或 en)。
 
-    system 跟随系统界面语言:系统界面是中文→zh_CN,其它一律回退英文。
+    system 跟随系统界面语言:按系统 UI 语言优先级选择第一个受支持语言。
     """
     if language_mode == LANGUAGE_ZH:
         return LANGUAGE_ZH
     if language_mode == LANGUAGE_EN:
         return LANGUAGE_EN
-    if _system_prefers_chinese():
+    return _resolve_system_locale()
+
+
+def _resolve_system_locale() -> str:
+    """解析系统 UI 语言,无法识别时回退英文源语言。"""
+    system_locale = QLocale.system()
+    language_tags = list(system_locale.uiLanguages())
+
+    # macOS 下 python main.py 会继承 shell 的 LANG/LC_* 环境,QLocale.system()
+    # 可能读到终端 locale,而不是“系统设置 > 语言与地区”的 UI 优先级。
+    if sys.platform == 'darwin':
+        macos_language_tags = _macos_ui_language_tags()
+        if macos_language_tags:
+            language_tags = macos_language_tags
+
+    # 关键逻辑:按系统偏好顺序选第一个受支持语言,不能因为备用语言里有中文就直接切中文。
+    for language_tag in language_tags:
+        if not isinstance(language_tag, str):
+            continue
+        normalized_tag = language_tag.strip().replace('_', '-').lower()
+        language_code = (
+            normalized_tag
+            .split('.', 1)[0]
+            .split('@', 1)[0]
+            .split('-', 1)[0]
+        )
+        locale = _SUPPORTED_LOCALE_BY_LANGUAGE_CODE.get(language_code)
+        if locale is not None:
+            return locale
+
+    # 兜底:当系统只返回 C locale 等无法解析的标签时,再看 Qt 的 language 枚举。
+    if system_locale.language() == QLocale.Language.Chinese:
         return LANGUAGE_ZH
     return LANGUAGE_EN
 
 
-def _system_prefers_chinese() -> bool:
-    system_locale = QLocale.system()
-    for language_tag in system_locale.uiLanguages():
-        normalized_tag = language_tag.replace('_', '-').lower()
-        if normalized_tag == 'zh' or normalized_tag.startswith('zh-'):
-            return True
-    return system_locale.language() == QLocale.Language.Chinese
+def _macos_ui_language_tags() -> list[str]:
+    """读取 macOS 全局 UI 语言偏好列表 AppleLanguages。"""
+    settings = QSettings(
+        QSettings.Format.NativeFormat,
+        QSettings.Scope.UserScope,
+        'Apple',
+        'Global Domain',
+    )
+    value = settings.value('AppleLanguages')
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [tag for tag in value if isinstance(tag, str)]
+    return []
 
 
 class TranslatorBundle:
