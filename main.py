@@ -97,7 +97,7 @@ def release_active_binding(active_bindings: dict[str, BatchFilesBinding], task_k
 
 
 def refresh_language_guard(window: MainWindow, active_bindings: dict[str, BatchFilesBinding], pending_running: bool = False):
-    """根据任务运行状态启停语言下拉，切换语言会重建窗口，运行中必须禁止。"""
+    """根据任务运行状态启停语言下拉，避免任务运行期间修改全局配置。"""
     has_running_task = pending_running or any(binding.isRunning() for binding in active_bindings.values())
     window.SettingWindow.set_language_change_enabled(not has_running_task)
 
@@ -213,8 +213,7 @@ def order_task_descriptors(settings: AppSettings, descriptors: list[TaskDescript
 
 
 class AppController:
-    """应用级协调器:持有 app / settings / translator / window / active_bindings,
-    并在语言切换时整体重建 MainWindow(QApplication 与 AppSettings 复用)。"""
+    """应用级协调器:持有 app / settings / translator / window / active_bindings。"""
 
     def __init__(self, app: QApplication):
         self._app = app
@@ -231,7 +230,7 @@ class AppController:
         self._flush_startup_warnings()
 
     def _build_window(self):
-        """构建全新的 MainWindow,完成任务注册与语言切换信号连接。"""
+        """构建 MainWindow,完成任务注册与语言切换信号连接。"""
         task_descriptors = order_task_descriptors(self.settings, build_task_descriptors())
         apply_app_theme(self.settings.theme, self._app)
         self.window = MainWindow(self.settings, task_descriptors)
@@ -240,7 +239,7 @@ class AppController:
         self.window.SettingWindow.language_changed.connect(self._change_language)
 
     def _change_language(self, language_mode: str):
-        """语言切换:有任务运行时拒绝;否则换 translator 并重建窗口。"""
+        """语言设置写入配置文件,下次启动时生效。"""
         if language_mode == self.settings.language:
             return
 
@@ -259,13 +258,11 @@ class AppController:
             self.window.SettingWindow.set_language_value(self.settings.language)
             return
 
-        # 先换 translator 再重建窗口,新窗口构造时的 tr() 才能命中新语言
-        self._translators.install(self._app, language_mode)
-        previous_window = self.window
-        self._build_window()
-        self.window.show_for_launch()
-        previous_window.close()
-        previous_window.deleteLater()
+        content = QCoreApplication.translate(
+            'AppController',
+            'Language setting saved. Restart the app to apply it.',
+        )
+        self.window.show_notification('success', title, content)
 
     def _flush_startup_warnings(self):
         """启动期配置告警延后到事件循环里弹出,避免与窗口构建抢时序。"""

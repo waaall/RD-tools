@@ -400,6 +400,7 @@ class SettingWindow(QWidget):
                 title = translate_setting_text(entry['path'][-1])
                 card = self._build_setting_card(
                     name=entry['name'],
+                    setting_key=entry['path'][-1],
                     value=entry['value'],
                     options=entry['options'],
                     title=translate_setting_text(entry.get('label')) if entry.get('label') else title,
@@ -434,7 +435,7 @@ class SettingWindow(QWidget):
         self._switch_panel(self.task_view, 'tasks')
         return self._select_nav_item(self.task_view, task_key)
 
-    def _build_setting_card(self, name: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon, parent=None):
+    def _build_setting_card(self, name: str, setting_key: str, value: Any, options: list[Any] | None, title: str, content: str | None, icon, parent=None):
         if name == 'language':
             return self._build_language_card(value, icon, parent or self)
         if options is not None:
@@ -444,7 +445,7 @@ class SettingWindow(QWidget):
                 card.checkedChanged.connect(lambda checked, setting_name=name: self.update_setting(setting_name, checked))
                 return card
 
-            labels = {option: translate_option_label(name, option) for option in options}
+            labels = {option: translate_option_label(setting_key, option) for option in options}
             card = AppComboBoxSettingCard(icon, title, content, options=options, value=value, labels=labels, parent=parent or self)
             card.valueChanged.connect(lambda selected, setting_name=name: self.update_setting(setting_name, selected))
             return card
@@ -488,7 +489,7 @@ class SettingWindow(QWidget):
             self._language_card.setValue(mode)
 
     def set_language_change_enabled(self, enabled: bool):
-        """任务运行期间禁用语言切换，避免重建窗口打断任务。"""
+        """任务运行期间禁用语言切换，避免运行中修改全局配置。"""
         self._language_change_enabled = enabled
         if self._language_card is not None:
             self._language_card.setEnabled(enabled)

@@ -11,7 +11,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
+from core.i18n import LANGUAGE_ZH
 from core.settings_schema import build_default_settings_payload
+from main import AppController
 from modules.app_settings import AppSettings
 from ui.task_ui_registry import build_task_descriptors
 from widgets.setting_page import SettingWindow
@@ -87,3 +89,34 @@ class SettingPageTests(unittest.TestCase):
         self.assertIsNotNone(after)
         self.assertEqual(after.data(Qt.UserRole), before_key)
         window.deleteLater()
+
+    def test_task_option_labels_use_json_key_for_translation(self):
+        settings = AppSettings()
+
+        with patch(
+            "widgets.setting_page.translate_option_label",
+            side_effect=lambda setting_key, value: f"{setting_key}:{value}",
+        ) as mocked_translate:
+            window = SettingWindow(settings, build_task_descriptors())
+            window.open_task_settings("files-renamer")
+
+        calls = [(args[0], args[1]) for args, _kwargs in mocked_translate.call_args_list]
+        self.assertIn(("mode", "prefix"), calls)
+        self.assertNotIn(("rename_mode", "prefix"), calls)
+        window.deleteLater()
+
+    def test_language_change_is_saved_without_rebuilding_window(self):
+        controller = AppController(self._app)
+        controller.start()
+        original_window = controller.window
+
+        try:
+            with patch.object(controller, "_build_window", wraps=controller._build_window) as mocked_build:
+                controller._change_language(LANGUAGE_ZH)
+
+            mocked_build.assert_not_called()
+            self.assertIs(controller.window, original_window)
+            self.assertEqual(controller.settings.language, LANGUAGE_ZH)
+        finally:
+            controller.window.close()
+            controller.window.deleteLater()

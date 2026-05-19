@@ -7,6 +7,8 @@
 - 如何新增任务、设置项、页面和主题样式
 - 如何在保持模块化和可读性的前提下继续扩展
 
+多语言机制只在本文档中说明 UI 层约定；完整设计、翻译文件维护和打包流程见 `docs/dev/i18n-design.md`。
+
 ## 1. 设计目标
 
 当前 UI 体系的核心目标是四个：
@@ -110,10 +112,18 @@
   - 任务元数据结构
 - `ui/theme.py`
   - 主题入口与应用级样式加载
+- `core/i18n.py`
+  - 应用语言模式、locale 解析与 translator 安装
+- `core/setting_texts.py`
+  - 设置页稳定 key 到显示文案的映射
 - `ui/qss/light/app.qss`
   - 明亮主题的应用级样式
 - `ui/qss/dark/app.qss`
   - 暗色主题的应用级样式
+- `i18n/rdtools_zh_CN.ts`
+  - 简体中文翻译源文件
+- `i18n/rdtools_zh_CN.qm`
+  - Qt 运行时加载的编译后翻译文件
 
 ### 3.2 分层关系
 
@@ -481,6 +491,20 @@ class TaskDescriptor:
 
 如果新增的是一种新的输入类型，而不是布尔/枚举/文本之一，则再考虑新增新的卡片适配组件。
 
+### 8.6 UI 文案与多语言边界
+
+当前 UI 以英文作为源语言，简体中文通过 Qt translator 覆盖。页面层新增可见文案时应遵守：
+
+- 页面静态文案使用 `self.tr('English source text')`
+- 跨页面或非 QObject 场景使用 `QCoreApplication.translate(context, 'English source text')`
+- 任务标题和说明在 `core/task_registry.py` 中用 `QT_TRANSLATE_NOOP('Tasks', ...)` 标记
+- 设置页不要直接把稳定 key 当显示文案，统一通过 `core/setting_texts.py` 翻译
+- 下拉选项显示文案和存储值分离，存储值保持稳定 key，显示时再翻译
+
+语言设置保存在 `settings.json`，但不在运行时重建窗口。用户修改语言后，下次启动生效，以避免刷新 UI 时丢失任务中心的工作目录、勾选项和日志。
+
+新增或修改可见文案后，需要同步更新 `i18n/*.ts` 并编译 `.qm`。完整流程见 `docs/dev/i18n-design.md`。
+
 ## 9. 帮助页设计
 
 帮助页保持最小复杂度。
@@ -530,10 +554,13 @@ class TaskDescriptor:
 推荐步骤：
 
 1. 新增或准备好对应的业务处理类
-2. 在 `main.py` 的 `build_task_descriptors()` 中增加一个 `TaskDescriptor`
-3. 确保 `operation_cls` 可由现有参数体系初始化
-4. 如果需要默认参数，在 `default_params` 中补充
-5. 运行应用，验证：
+2. 在 `core/task_registry.py` 中增加一个 `TaskSpec`
+3. 在 `ui/task_ui_registry.py` 中为任务 key 补齐图标
+4. 确保 `module_path` / `class_name` 可以被 `TaskLoader` 懒加载
+5. 确保业务类可由 `core/task_params.build_task_params()` 组装出的参数初始化
+6. 如果需要默认参数，在 `default_params` 中补充
+7. 如果新增任务标题、说明或设置文案，同步更新翻译文件
+8. 运行应用，验证：
    - 左侧任务是否出现
    - 描述是否正确显示
    - 日志是否独立
@@ -542,12 +569,12 @@ class TaskDescriptor:
 示例：
 
 ```python
-TaskDescriptor(
+TaskSpec(
     key='new-task',
-    title='新任务',
-    description='这里写任务说明。',
-    icon=FIF.DOCUMENT,
-    operation_cls=MyTask,
+    title=QT_TRANSLATE_NOOP('Tasks', 'New Task'),
+    description=QT_TRANSLATE_NOOP('Tasks', 'Describe what this task does.'),
+    module_path='modules.new_task',
+    class_name='NewTask',
     default_params={'parallel': False},
 )
 ```

@@ -30,9 +30,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from core.task_registry import get_task_specs
-
-
 ROOT_DIR = Path(__file__).resolve().parent
 REQUIREMENTS_DIR = ROOT_DIR / "requirements"
 BASE_REQUIREMENTS_FILE = REQUIREMENTS_DIR / "base.txt"
@@ -147,6 +144,8 @@ def _extend_command_with_resource_data(command: list[str], current_platform: str
 
 
 def _registered_task_module_paths() -> list[str]:
+    from core.task_registry import get_task_specs
+
     module_paths: list[str] = []
     for spec in get_task_specs():
         # 任务模块是通过注册表里的字符串在运行时动态导入的，

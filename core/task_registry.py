@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from PySide6.QtCore import QT_TRANSLATE_NOOP
+try:
+    from PySide6.QtCore import QT_TRANSLATE_NOOP
+except ImportError:
+    def QT_TRANSLATE_NOOP(_context: str, source: str) -> str:
+        return source
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -57,6 +59,29 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("modules.gen_subtitles", module_paths)
         self.assertEqual(len(module_paths), len(set(module_paths)))
 
+    def test_install_script_import_does_not_require_runtime_dependencies(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import builtins; "
+                    "real_import = builtins.__import__; "
+                    "builtins.__import__ = lambda name, *args, **kwargs: "
+                    "(_ for _ in ()).throw(ModuleNotFoundError(\"No module named 'PySide6'\")) "
+                    "if name.startswith('PySide6') else real_import(name, *args, **kwargs); "
+                    "import install; "
+                    "print('ok')"
+                ),
+            ],
+            cwd=install.ROOT_DIR,
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+
+        self.assertEqual(completed.stdout.strip(), "ok")
+
     def test_build_pyinstaller_command_uses_build_python_and_excludes_optional_modules(self):
         command = install._build_pyinstaller_command(
             python_executable=Path("/tmp/build-env/bin/python"),
@@ -64,7 +89,8 @@ class InstallScriptTests(unittest.TestCase):
             include_transcription_stack=False,
         )
 
-        self.assertEqual(command[:3], ["/tmp/build-env/bin/python", "-m", "PyInstaller"])
+        self.assertEqual(Path(command[0]), Path("/tmp/build-env/bin/python"))
+        self.assertEqual(command[1:3], ["-m", "PyInstaller"])
         self.assertIn("--hidden-import=modules.files_renamer", command)
         self.assertIn("--hidden-import=modules.gen_subtitles", command)
         self.assertIn("--collect-submodules=pydicom", command)

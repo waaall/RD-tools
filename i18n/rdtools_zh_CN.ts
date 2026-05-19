@@ -18,6 +18,11 @@
             <translation>语言设置保存失败。</translation>
         </message>
         <message>
+            <location filename="../main.py" line="264" />
+            <source>Language setting saved. Restart the app to apply it.</source>
+            <translation>语言设置已保存。重启应用后生效。</translation>
+        </message>
+        <message>
             <location filename="../main.py" line="273" />
             <source>Task order</source>
             <translation>任务顺序</translation>

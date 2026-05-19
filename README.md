@@ -113,3 +113,5 @@ If you have local changes, resolve any Git conflicts before running or building 
 ## Documentation
 
 Open the Help page in the app for task manuals and developer notes. The in-app manuals are intentionally kept as existing Markdown documents for now.
+
+Developer design notes live under `docs/dev/`, including the Fluent UI guide and the i18n design guide.

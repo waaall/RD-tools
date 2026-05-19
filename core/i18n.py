@@ -45,15 +45,24 @@ def coerce_language(value: object) -> str:
 def resolve_locale(language_mode: str) -> str:
     """把 language 设置解析成实际生效的 locale(zh_CN 或 en)。
 
-    system 跟随系统语言:系统是中文→zh_CN,其它一律回退英文。
+    system 跟随系统界面语言:系统界面是中文→zh_CN,其它一律回退英文。
     """
     if language_mode == LANGUAGE_ZH:
         return LANGUAGE_ZH
     if language_mode == LANGUAGE_EN:
         return LANGUAGE_EN
-    if QLocale.system().language() == QLocale.Language.Chinese:
+    if _system_prefers_chinese():
         return LANGUAGE_ZH
     return LANGUAGE_EN
+
+
+def _system_prefers_chinese() -> bool:
+    system_locale = QLocale.system()
+    for language_tag in system_locale.uiLanguages():
+        normalized_tag = language_tag.replace('_', '-').lower()
+        if normalized_tag == 'zh' or normalized_tag.startswith('zh-'):
+            return True
+    return system_locale.language() == QLocale.Language.Chinese
 
 
 class TranslatorBundle:
