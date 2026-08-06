@@ -2,15 +2,14 @@
     ===========================README============================
     create date:    20241022
     creator:        zhengxu
-    function:       批量清理 macOS 系统创建的_PoopPrefix开头隐藏文件
+    function:       批量清理 macOS 系统创建的隐藏元数据文件
 
     version:        beta 1.0
     details:        当 macOS 系统在非原生文件系统上创建文件时, 会自动创建以 ._ 开头的隐藏文件
-                    这个工具用于清理这些隐藏文件, 如果有同名文件（去掉前缀后）, 则删除隐藏文件
+                    这个工具会递归清理 .DS_Store；对于 ._ 文件，只有存在对应原文件时才删除
 """
 # =========================用到的库==========================
 import os
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from modules.files_basic import FilesBasic
@@ -33,6 +32,8 @@ class MacPoopScooper(FilesBasic):
         self.files_deleted = 0
         # 定义隐藏文件前缀
         self._PoopPrefix = '._'
+        # 可以安全直接清理的 macOS 元数据文件
+        self._JunkFileNames = {'.DS_Store'}
 
     # =======================处理单个数据文件夹函数=======================
     def _data_dir_handler(self, _data_dir: str):
@@ -48,19 +49,21 @@ class MacPoopScooper(FilesBasic):
 
         # 递归遍历所有文件
         for root, _, files in os.walk(full_path):
-            # 筛选出开头的文件
-            poop_files = [f for f in files if f.startswith(self._PoopPrefix)]
+            for file_name in files:
+                file_path = os.path.join(root, file_name)
 
-            if poop_files:
-                for poop_file in poop_files:
-                    # 构建完整文件路径
-                    poop_file_path = os.path.join(root, poop_file)
-                    # 获取对应的正常文件名（去掉前缀）
-                    normal_file = poop_file[len(self._PoopPrefix):]
+                # Finder 目录元数据不依赖对应的正常文件，可以直接清理
+                if file_name in self._JunkFileNames:
+                    real_poop_files.append(file_path)
+                    continue
 
-                    # 只有当对应的正常文件存在时, 才添加到任务列表
-                    if os.path.exists(os.path.join(root, normal_file)):
-                        real_poop_files.append(poop_file_path)
+                if not file_name.startswith(self._PoopPrefix):
+                    continue
+
+                # AppleDouble 文件仍采用保守策略：只有对应的正常文件存在时才清理
+                normal_file = file_name[len(self._PoopPrefix):]
+                if os.path.exists(os.path.join(root, normal_file)):
+                    real_poop_files.append(file_path)
 
         self.files_found += len(real_poop_files)
 
